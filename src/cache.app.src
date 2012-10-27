@@ -1,0 +1,18 @@
+{application, cache,
+   [
+      {description, "in-memory cache"},
+      {vsn,         "0.1.0"},
+      {modules,     [
+         cache,
+         cache_sup, 
+         cache_app
+      ]},
+      {registered,  []},
+      {applications,[
+         kernel,
+         stdlib
+      ]},
+      {mod, {cache_app, []}},
+      {env, []}
+   ]
+}.  
