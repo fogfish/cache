@@ -4,7 +4,7 @@
 -author('Dmitry Kolesnikov <dmkolesnikov@gmail.com>').
 
 -export([start_link/2]).
--export([put/3, get/2, evict/1, stop/1]).
+-export([i/1, put/3, get/2, evict/1, stop/1]).
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2, code_change/3]).
 
 -define(DEFAULT_POLICY,     lru).
@@ -22,7 +22,10 @@
    ttl,       %% cache element ttl
    evict,     %% house keeping timer to evict cache elements
    elements,
-   access
+   access,
+
+   hit,
+   miss
 }).
 
 %%
@@ -35,7 +38,9 @@ init([Opts]) ->
       evict  = ?DEFAULT_EVICT,
       policy = ?DEFAULT_POLICY,
       chunk  = ?DEFAULT_CHUNK,
-      ttl    = ?DEFAULT_TTL * 1000
+      ttl    = ?DEFAULT_TTL * 1000,
+      hit    = 0,
+      miss   = 0
    }).
 
 init([{policy, X} | T], #cache{}=S) ->
@@ -74,6 +79,9 @@ init([], #cache{evict=Evict}=S) ->
 
 %%
 %%
+i(Cache) ->
+   gen_server:call(Cache, info).
+
 put(Cache, Key, Val) ->
 	gen_server:cast(Cache, {put, Key, Val}).
 
@@ -94,19 +102,30 @@ stop(Cache) ->
 
 %%
 %%
-handle_call({get, Key}, _Tx, #cache{ttl=TTL, elements=E, access=A}=S) ->
+handle_call(info, _Tx,  #cache{elements=E, access=A, hit=Hit, miss=Miss}=S) ->
+   Mem  = ets:info(E, memory) + ets:info(A, memory),
+   Size = ets:info(E, size),
+   Info = [
+      {memory, Mem},
+      {size,  Size},
+      {hit,    Hit},
+      {miss,  Miss}
+   ],
+   {reply, {ok, Info}, S};
+
+handle_call({get, Key}, _Tx, #cache{ttl=TTL, elements=E, access=A, hit=Hit, miss=Miss}=S) ->
    Now = usec(),
    case ets:lookup(E, Key) of
    	[] -> 
-   	   {reply, none, S};
+   	   {reply, none, S#cache{miss=Miss + 1}};
    	[{Key, _Val, Expire0}] when Expire0 =< Now ->
-   	   {reply, none, S};
+   	   {reply, none, S#cache{miss=Miss + 1}};
    	[{Key, Val, Expire0}] ->
    	   Expire = Now + TTL,
    		ets:insert(E, {Key, Val, Expire}),
    		ets:delete(A, Expire0),
    		ets:insert(A, {Expire, Key}),
-   	   {reply, {ok, Val}, S}
+   	   {reply, {ok, Val}, S#cache{hit=Hit + 1}}
    end;
 
 handle_call(stop, _Tx, S) ->

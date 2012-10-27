@@ -1,6 +1,6 @@
 -module(cache).
 -export([start/0]).
--export([start_link/2, put/3, get/2, evict/1, stop/1]).
+-export([start_link/2, i/1, put/3, get/2, evict/1, stop/1]).
 
 
 start() ->
@@ -23,6 +23,9 @@ start() ->
 %%
 start_link(Name, Opts) ->
    cache_bucket:start_link(Name, Opts).
+
+i(Cache) ->
+   cache_bucket:i(Cache).   
 
 %%
 %%
