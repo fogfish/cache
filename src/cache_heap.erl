@@ -21,7 +21,7 @@
 -module(cache_heap).
 
 -export([
-   new/1, alloc/1, talloc/2, free/1, free/2,
+   new/1, alloc/1, free/1, free/2,
    cells/1, size/1, memory/1, last/1, first/1
 ]).
 
@@ -44,17 +44,6 @@ alloc(#heap{}=H) ->
    H#heap{
       cells = [create() | H#heap.cells]
    }.
-
-% tail alloc
-talloc(N, #heap{}=H) 
- when length(H#heap.cells) < N ->
-   talloc(N,
-      H#heap{
-         cells = H#heap.cells ++ [create()]
-      }
-   );
-talloc(_, #heap{}=H) ->
-   H.
 
 create() ->
    ets:new(undefined, [set, protected]).

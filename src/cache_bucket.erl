@@ -237,13 +237,6 @@ evict(#cache{}=S) ->
       heap = cache_heap:alloc(cache_heap:free(Cell, S#cache.heap))
    }.
 
-drop(#cache{}=S) ->
-   Cell = cache_heap:last(S#cache.heap),
-   ?DEBUG("cache ~p: free cell ~p~n", [S#cache.name, Cell]),
-   S#cache{
-      heap = cache_heap:free(Cell, S#cache.heap)
-   }.
-
 %%
 %%
 quota(#cache{}=S) ->
@@ -255,23 +248,23 @@ quota(#cache{}=S) ->
 maybe_size_quota(#cache{quota_size=undefined}=S) ->
    S;
 maybe_size_quota(S) ->
-   case lists:sum(cache_heap:size(S#cache.heap)) of
-      Size when Size > S#cache.quota_size ->
-         maybe_size_quota(drop(S));
+   Quota      = S#cache.quota_size div S#cache.n,
+   [Head | _] = cache_heap:cells(S#cache.heap),
+   case ets:info(Head, size) of
+      Val when Val >= Quota ->
+         evict(S);
       _ ->
-         S#cache{
-            heap = cache_heap:talloc(S#cache.n, S#cache.heap)
-         }
+         S
    end.
 
 maybe_memory_quota(#cache{quota_memory=undefined}=S) ->
    S;
 maybe_memory_quota(S) ->
-   case lists:sum(cache_heap:memory(S#cache.heap)) of
-      Size when Size > S#cache.quota_memory ->
-         maybe_memory_quota(drop(S));
+   Quota      = S#cache.quota_size div S#cache.n,
+   [Head | _] = cache_heap:cells(S#cache.heap),
+   case ets:info(Head, memory) of
+      Val when Val >= Quota ->
+         evict(S);
       _ ->
-         S#cache{
-            heap = cache_heap:talloc(S#cache.n, S#cache.heap)
-         }
+         S
    end.
