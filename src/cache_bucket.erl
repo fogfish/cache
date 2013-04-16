@@ -260,7 +260,7 @@ maybe_size_quota(S) ->
 maybe_memory_quota(#cache{quota_memory=undefined}=S) ->
    S;
 maybe_memory_quota(S) ->
-   Quota      = S#cache.quota_size div S#cache.n,
+   Quota      = S#cache.quota_memory div S#cache.n,
    [Head | _] = cache_heap:cells(S#cache.heap),
    case ets:info(Head, memory) of
       Val when Val >= Quota ->
