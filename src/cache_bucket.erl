@@ -2,97 +2,73 @@
 -module(cache_bucket).
 -behaviour(gen_server).
 -author('Dmitry Kolesnikov <dmkolesnikov@gmail.com>').
+-include("cache.hrl").
 
--export([start_link/2]).
--export([i/1, put/3, get/2, evict/1, stop/1]).
--export([init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2, code_change/3]).
-
--define(DEFAULT_POLICY,     lru).
--define(DEFAULT_TTL,      60000).
--define(DEFAULT_EVICT,    10000).
--define(DEFAULT_CHUNK,      100).
+-export([
+   start_link/2,
+   init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2, code_change/3
+]).
 
 %%
+%%
 -record(cache, {
-   policy,    %%
-   memory,    %% memory threshold
-   size,      %% size threshold
-   chunk,     %% number of evicted elements 
+   name   :: atom(),     %% name of cache bucket
+   heap   :: list(),     %% heap
 
-   ttl,       %% cache element ttl
-   evict,     %% house keeping timer to evict cache elements
-   elements,
-   access,
+   n      = ?DEF_CACHE_N      :: integer(),  %% number of cells          
+   ttl    = ?DEF_CACHE_TTL    :: integer(),  %% chunk time to live
+   policy = ?DEF_CACHE_POLICY :: integer(),  %% eviction policy
+   evict                      :: integer(),  %% age of heap cell (cell eviction frequency)
 
-   hit,
-   miss
+   quota  = ?DEF_CACHE_QUOTA  :: integer(),  %% frequency of limit enforcement (clean-up)
+   quota_size   :: integer(),  %% max number of elements
+   quota_memory :: integer()   %% max number of memory in bytes
 }).
 
 %%
 %%
 start_link(Name, Opts) ->
-   gen_server:start_link({local, Name}, ?MODULE, [Opts], []).
+   gen_server:start_link({local, Name}, ?MODULE, [Name, Opts], []).
 
-init([Opts]) ->
-   init(Opts, #cache{
-      evict  = ?DEFAULT_EVICT,
-      policy = ?DEFAULT_POLICY,
-      chunk  = ?DEFAULT_CHUNK,
-      ttl    = ?DEFAULT_TTL * 1000,
-      hit    = 0,
-      miss   = 0
-   }).
+init([Name, Opts]) ->
+   {ok, init(Opts, #cache{name=Name})}.
 
 init([{policy, X} | T], #cache{}=S) ->
    init(T, S#cache{policy=X});
 
-init([{memory, X} | T], #cache{}=S) ->
-   init(T, S#cache{memory=X div erlang:system_info(wordsize)});
+init([{memory, X} | Opts], S) ->
+   init(Opts, S#cache{quota_memory=X div erlang:system_info(wordsize)});
 
-init([{size,  X} | T], #cache{}=S) ->
-   init(T, S#cache{size=X});
+init([{size,  X} | Opts],  S) ->
+   init(Opts, S#cache{quota_size=X});
 
-init([{chunk, X} | T], #cache{}=S) ->
-   init(T, S#cache{chunk=X});
+init([{n,   X} | Opts], S) ->
+   init(Opts, S#cache{n = X});
 
-init([{ttl, X} | T], #cache{}=S) ->
-   init(T, S#cache{ttl=X * 1000});
+init([{ttl, X} | Opts], S) ->
+   init(Opts, S#cache{ttl = X});
 
-init([{evict, X} | T], #cache{}=S) ->
-   init(T, S#cache{evict=X});
+init([{quota, X} | Opts], S) ->
+   init(Opts, S#cache{quota=X * 1000});
 
-init([], #cache{evict=Evict}=S) ->
+init([_ | Opts], S) ->
+   init(Opts, S);
+
+init([], S) ->
    random:seed(erlang:now()),
+   Evict = (S#cache.ttl div S#cache.n) * 1000,
+   erlang:send_after(S#cache.quota, self(), quota),
    erlang:send_after(Evict, self(), evict),
-   {ok,
-      S#cache{
-         elements = ets:new(undefined, [set, private]),
-         access   = ets:new(undefined, [ordered_set, private])
-      }
+   S#cache{
+      heap  = cache_heap:new(S#cache.n),
+      evict = Evict
    }.
 
-%%%----------------------------------------------------------------------------   
-%%%
-%%% api 
-%%%
-%%%----------------------------------------------------------------------------   
-
 %%
-%%
-i(Cache) ->
-   gen_server:call(Cache, info).
-
-put(Cache, Key, Val) ->
-	gen_server:cast(Cache, {put, Key, Val}).
-
-get(Cache, Key) ->
-   gen_server:call(Cache, {get, Key}, infinity).
-
-evict(Cache) ->
-   gen_server:cast(Cache, evict).
-
-stop(Cache) ->
-   gen_server:call(Cache, stop, infinity).
+%%     
+terminate(_Reason, S) ->
+   cache_heap:free(S#cache.heap),
+   ok.
 
 %%%----------------------------------------------------------------------------   
 %%%
@@ -100,72 +76,51 @@ stop(Cache) ->
 %%%
 %%%----------------------------------------------------------------------------   
 
-%%
-%%
-handle_call(info, _Tx,  #cache{elements=E, access=A, hit=Hit, miss=Miss}=S) ->
-   Mem  = ets:info(E, memory) + ets:info(A, memory),
-   Size = ets:info(E, size),
-   Info = [
-      {memory, Mem},
-      {size,  Size},
-      {hit,    Hit},
-      {miss,  Miss}
-   ],
-   {reply, {ok, Info}, S};
+handle_call({put, Key, Val}, _, S) ->
+   {reply, ok, insert(Key, Val, S)};
 
-handle_call({get, Key}, _Tx, #cache{ttl=TTL, elements=E, access=A, hit=Hit, miss=Miss}=S) ->
-   Now = usec(),
-   case ets:lookup(E, Key) of
-   	[] -> 
-   	   {reply, none, S#cache{miss=Miss + 1}};
-   	[{Key, _Val, Expire0}] when Expire0 =< Now ->
-   	   {reply, none, S#cache{miss=Miss + 1}};
-   	[{Key, Val, Expire0}] ->
-   	   Expire = Now + TTL,
-   		ets:insert(E, {Key, Val, Expire}),
-   		ets:delete(A, Expire0),
-   		ets:insert(A, {Expire, Key}),
-   	   {reply, {ok, Val}, S#cache{hit=Hit + 1}}
+handle_call({get, Key}, _, S) ->
+   {reply, lookup(Key, S), S};
+
+handle_call({has, Key}, _, S) ->
+   case member(Key, S) of
+      true -> {reply, true,  S};
+      _    -> {reply, false, S}
    end;
 
-handle_call(stop, _Tx, S) ->
-   {stop, normal, ok, S};
+handle_call({remove, Key}, _, S) ->
+   {reply, ok, remove(Key, S)};
 
-handle_call(_Req,  _Tx, S) ->
-   {reply, {error, not_implemented}, S}.
+handle_call(i, _, S) ->
+   Cells  = cache_heap:cells(S#cache.heap), 
+   Size   = cache_heap:size(S#cache.heap), 
+   Memory = cache_heap:memory(S#cache.heap), 
+   {reply, [{heap, Cells}, {size, Size}, {memory, Memory}], S};
 
-%%
-%%
-handle_cast({put, Key, Val}, #cache{ttl=TTL, elements=E, access=A}=S) ->
-   Expire = usec() + TTL,
-   ets:insert(E, {Key, Val, Expire}),
-   ets:insert(A, {Expire, Key}),
-   {noreply, S};
-
-handle_cast(evict, #cache{elements=E, access=A}=S) ->
-   evict_expired(usec(), E, A),
-   evict_cache(S),
-   {noreply, S};
-
-handle_cast(_Req, S) ->
+handle_call(_, _, S) ->
    {noreply, S}.
 
 %%
 %%
-handle_info(evict, #cache{evict=Evict, elements=E, access=A}=S) ->
-   evict_expired(usec(), E, A),
-   evict_cache(S),
-   erlang:send_after(Evict, self(), evict),
-   {noreply, S};
+handle_cast({put, Key, Val}, S) ->
+   {noreply, insert(Key, Val, S)};
 
+handle_cast({remove, Key}, S) ->
+   {noreply, remove(Key, S)};
 
-handle_info(_Msg, S) ->
+handle_cast(_, S) ->
    {noreply, S}.
 
-%%
-%%     
-terminate(_Reason, _S) ->
-   ok.
+handle_info(evict, S) ->
+   erlang:send_after(S#cache.evict, self(), evict),
+   {noreply, evict(S)};
+
+handle_info(quota, S) ->
+   erlang:send_after(S#cache.quota, self(), quota),
+   {noreply, quota(S)};
+
+handle_info(_, S) ->
+   {noreply, S}.
 
 %%
 %% 
@@ -180,106 +135,143 @@ code_change(_Vsn, S, _Extra) ->
 %%%----------------------------------------------------------------------------   
 
 %%
-%%
-usec() ->
-   {Mega, Sec, USec} = erlang:now(),
-   (Mega * 1000000 + Sec) * 1000000 + USec.
+%% evict key from cells 
+evict_key(Key, List) ->
+   dowhile(
+      fun(Cell) -> 
+         case ets:member(Cell, Key) of
+            true   -> 
+               ets:delete(Cell, Key),
+               Cell;
+            Result -> 
+               Result
+         end
+      end,
+      List
+   ).
 
 %%
 %%
-check_memory(#cache{memory=undefined}) ->
-   true;
-check_memory(#cache{memory=Mem, elements=E, access=A}) ->
-   Used = ets:info(E, memory) + ets:info(A, memory),
-   if
-      Used > Mem -> false;
-      true       -> true
+insert(Key, Val, #cache{}=S) ->
+   [Head | Tail] = cache_heap:cells(S#cache.heap),
+   true = ets:insert(Head, {Key, Val}),
+   _    = evict_key(Key, Tail),
+   ?DEBUG("cache ~p: put ~p to cell ~p~n", [S#cache.name, Key, Head]),
+   S.
+
+%%
+%%
+remove(Key, S) ->
+   Cell = evict_key(Key, cache_heap:cells(S#cache.heap)),
+   ?DEBUG("cache ~p: remove ~p in cell ~p~n", [S#cache.name, Key, Cell]),
+   S.
+
+%%
+%%
+member(Key, S) ->
+   dowhile(
+      fun(X) -> ets:member(X, Key) end,
+      cache_heap:cells(S#cache.heap)
+   ).  
+
+%%
+%%
+lookup(Key, #cache{policy=mru}=S) ->
+   % cache always evicts last generation
+   % MRU caches do not prolong recently used entity
+   dowhile(
+      fun(Cell) ->
+         case ets:lookup(Cell, Key) of
+            [] ->
+               false;
+            [{_, Val}] ->
+               ?DEBUG("cache ~p: get ~p at cell ~p~n", [S#cache.name, Key, Cell]),
+               Val
+         end
+      end,
+      lists:reverse(cache_heap:cells(S#cache.heap))
+   );
+
+lookup(Key, S) ->
+   [Head | Tail] = cache_heap:cells(S#cache.heap),
+   case ets:lookup(Head, Key) of
+      % no value at head chunk, lookup and evict tail 
+      [] ->
+         dowhile(
+            fun(Cell) ->
+               case ets:lookup(Cell, Key) of
+                  [] ->
+                     false;
+                  [{_, Val}] ->
+                     ?DEBUG("cache ~p: get ~p at cell ~p~n", [S#cache.name, Key, Cell]),
+                     _    = ets:delete(Cell, Key),
+                     true = ets:insert(Head, {Key, Val}),
+                     Val
+               end
+            end,
+            Tail
+         );
+      [{_, Val}] -> 
+         ?DEBUG("cache ~p: get ~p in cell ~p~n", [S#cache.name, Key, Head]),
+         Val
    end.
 
 %%
-%%
-check_size(#cache{size=undefined}) ->
-   true;
-check_size(#cache{size=Size, elements=E}) ->
-   Used = ets:info(E, size),
-   if
-      Used > Size -> false;
-      true        -> true
-   end.
-
-%%
-%%
-check(S) ->
-   case check_memory(S) of
-      true  -> check_size(S);
-      false -> false
-   end.
-
-%%
-%%
-evict_expired(Expire, Element, Access) ->
-   case ets:first(Access) of
-      '$end_of_table' ->
-         ok; 
-      Time when Time > Expire ->   
-         ok;
-      Time ->
-         [{_, Key}] = ets:lookup(Access, Time),
-   	   ets:delete(Element, Key),
-   	   ets:delete(Access, Time),
-   	   evict_expired(Expire, Element, Access)
-  	end.
-
-%%
-%%
-evict_cache(#cache{policy=lru, chunk=Chunk, elements=E, access=A}=S) ->
-   case check(S) of
-      true  -> 
-         ok;
-      false ->
-         N = erlang:max(1, random:uniform(Chunk)), 
-         evict_lru(N, E, A),
-         evict_cache(S)
+%% execute predicate while it succeeded
+dowhile(Pred, [Head | Tail]) ->
+   case Pred(Head) of
+      % predicate false, apply predicate to next chunk
+      false  -> dowhile(Pred, Tail);
+      Result -> Result
    end;
 
-evict_cache(#cache{policy=mru, chunk=Chunk, elements=E, access=A}=S) ->
-   case check(S) of
-      true  -> 
-         ok;
-      false ->
-         N = erlang:max(1, random:uniform(Chunk)), 
-         evict_mru(N, E, A),
-         evict_cache(S)
+dowhile(_Pred, []) ->
+   undefined.
+
+%%
+%%
+evict(#cache{}=S) ->
+   Cell = cache_heap:last(S#cache.heap),
+   ?DEBUG("cache ~p: free cell ~p~n", [S#cache.name, Cell]),
+   S#cache{
+      heap = cache_heap:alloc(cache_heap:free(Cell, S#cache.heap))
+   }.
+
+drop(#cache{}=S) ->
+   Cell = cache_heap:last(S#cache.heap),
+   ?DEBUG("cache ~p: free cell ~p~n", [S#cache.name, Cell]),
+   S#cache{
+      heap = cache_heap:free(Cell, S#cache.heap)
+   }.
+
+%%
+%%
+quota(#cache{}=S) ->
+   maybe_memory_quota(
+      maybe_size_quota(S)
+   ).
+
+
+maybe_size_quota(#cache{quota_size=undefined}=S) ->
+   S;
+maybe_size_quota(S) ->
+   case lists:sum(cache_heap:size(S#cache.heap)) of
+      Size when Size > S#cache.quota_size ->
+         maybe_size_quota(drop(S));
+      _ ->
+         S#cache{
+            heap = cache_heap:talloc(S#cache.n, S#cache.heap)
+         }
    end.
 
-
-%%
-%%
-evict_lru(0, _Element, _Access) ->
-   ok;
-evict_lru(N, Element, Access) ->
-   case ets:first(Access) of
-      '$end_of_table' ->
-         ok; 
-      Time ->
-         [{_, Key}] = ets:lookup(Access, Time),
-         ets:delete(Element, Key),
-         ets:delete(Access, Time),
-         evict_lru(N - 1, Element, Access)
+maybe_memory_quota(#cache{quota_memory=undefined}=S) ->
+   S;
+maybe_memory_quota(S) ->
+   case lists:sum(cache_heap:memory(S#cache.heap)) of
+      Size when Size > S#cache.quota_memory ->
+         maybe_memory_quota(drop(S));
+      _ ->
+         S#cache{
+            heap = cache_heap:talloc(S#cache.n, S#cache.heap)
+         }
    end.
-
-%%
-%%
-evict_mru(0, _Element, _Access) ->
-   ok;
-evict_mru(N, Element, Access) ->
-   case ets:last(Access) of
-      '$end_of_table' ->
-         ok; 
-      Time ->
-         [{_, Key}] = ets:lookup(Access, Time),
-         ets:delete(Element, Key),
-         ets:delete(Access, Time),
-         evict_mru(N - 1, Element, Access)
-   end.
-

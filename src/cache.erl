@@ -1,49 +1,50 @@
 -module(cache).
--export([start/0]).
--export([start_link/2, i/1, put/3, get/2, evict/1, stop/1]).
 
-
-start() ->
-   AppFile = code:where_is_file(atom_to_list(?MODULE) ++ ".app"),
-   {ok, [{application, _, List}]} = file:consult(AppFile), 
-   Apps = proplists:get_value(applications, List, []),
-   lists:foreach(
-      fun(X) -> 
-         ok = case application:start(X) of
-            {error, {already_started, X}} -> ok;
-            Ret -> Ret
-         end
-      end,
-      Apps
-   ),
-   application:start(?MODULE).
-
+-export([
+   start_link/2, drop/1, i/1,
+   put/3, put_/3, get/2, has/2, remove/2, remove_/2
+]).
 
 %%
 %%
-start_link(Name, Opts) ->
-   cache_bucket:start_link(Name, Opts).
+start_link(Cache, Opts) ->
+   cache_bucket:start_link(Cache, Opts).
 
+%%
+%%
+drop(Cache) ->
+   erlang:exit(whereis(Cache), shutdown).
+
+%%
+%%
 i(Cache) ->
-   cache_bucket:i(Cache).   
+   gen_server:call(Cache, i).   
 
 %%
 %%
 put(Cache, Key, Val) ->
-   cache_bucket:put(Cache, Key, Val).
+   gen_server:call(Cache, {put, Key, Val}).
+
+put_(Cache, Key, Val) ->
+   gen_server:cast(Cache, {put, Key, Val}).
 
 %%
 %%
 get(Cache, Key) ->
-   cache_bucket:get(Cache, Key).
+   gen_server:call(Cache, {get, Key}).
 
 %%
 %%
-evict(Cache) ->
-   cache_bucket:evict(Cache).
+has(Cache, Key) ->
+   gen_server:call(Cache, {has, Key}).
 
 %%
 %%
-stop(Cache) ->
-   cache_bucket:stop(Cache).
+remove(Cache, Key) ->
+   gen_server:call(Cache, {remove, Key}).
+
+%%
+%%
+remove_(Cache, Key) ->
+   gen_server:cast(Cache, {remove, Key}).
 

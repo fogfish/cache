@@ -1,5 +1,7 @@
 .PHONY: deps test
 
+BB=../basho_bench
+
 all: rebar deps compile
 
 compile:
@@ -30,4 +32,10 @@ run:
 rebar:
 	curl -O http://cloud.github.com/downloads/basho/rebar/rebar
 	chmod ugo+x rebar
+
+benchmark:
+	$(BB)/basho_bench priv/cache.benchmark
+	$(BB)/priv/summary.r -i tests/current
+	open tests/current/summary.png
+
 
