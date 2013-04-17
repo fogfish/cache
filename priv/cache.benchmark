@@ -17,7 +17,8 @@
  %,{remove, 1} 
 ]}.
 
-{cache,   [
+{cache, {mycache, 'cache@127.0.0.1'}}.
+{local, [
    {ttl,     20}
   ,{n,       10} 
   ,{policy, lru}

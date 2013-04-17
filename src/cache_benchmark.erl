@@ -11,51 +11,49 @@
 new(_Id) ->
    try
       lager:set_loglevel(lager_console_backend, basho_bench_config:get(log_level, info)),
-      init()
+      case basho_bench_config:get(cache, undefined) of
+         undefined -> {ok, local_init()};
+         Cache     -> {ok, Cache}
+      end
    catch _:Err ->
       error_logger:error_msg("cache failed: ~p", [Err]),
       halt(1)
-   end,
-   {ok, undefined}.
+   end.
 
 %%
 %%
-run(put, KeyGen, ValGen, S) ->
+run(put, KeyGen, ValGen, Cache) ->
    Key = KeyGen(),
-   case (catch cache:put(cache, Key, ValGen())) of
-      ok -> {ok, S};
-      E  -> {error, failure(p, Key, E), S}
+   case (catch cache:put(Cache, Key, ValGen())) of
+      ok -> {ok, Cache};
+      E  -> {error, failure(p, Key, E), Cache}
    end;
 
-run(get, KeyGen, _ValueGen, S) ->
+run(get, KeyGen, _ValueGen, Cache) ->
    Key = KeyGen(),
-   case (catch cache:get(cache, Key)) of
-      Val when is_binary(Val) -> {ok, S};
-      undefined               -> {ok, S};
-      E -> {error, failure(g, Key, E), S}
+   case (catch cache:get(Cache, Key)) of
+      Val when is_binary(Val)  -> {ok, Cache};
+      undefined                -> {ok, Cache};
+      E -> {error, failure(g, Key, E), Cache}
    end;
 
-run(remove, KeyGen, _ValueGen, S) ->
+run(remove, KeyGen, _ValueGen, Cache) ->
    Key = KeyGen(),
    case (catch cache:remove(cache, Key)) of
-      ok -> {ok, S};
-      E  -> {error, failure(r, Key, E), S}
-   end;
-
-run(dump, _KeyGen, _ValueGen, S) ->
-   error_logger:info_msg("cache: ~p", [cache:i(cache)]),
-   {ok, S}.
+      ok -> {ok, Cache};
+      E  -> {error, failure(r, Key, E), Cache}
+   end.
 
 
-%%
-%%
-init() ->
+%% 
+local_init() ->
    case application:start(cache) of
       {error, {already_started, _}} ->
-         ok;
+         cache;
       ok ->
-         Cache   = basho_bench_config:get(cache, 30000),
-         {ok, _} = cache:start_link(cache, Cache)
+         Cache   = basho_bench_config:get(local, undefined),
+         {ok, _} = cache:start_link(cache, Cache),
+         cache
    end.
 
 %%

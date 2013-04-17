@@ -27,8 +27,11 @@
 
 %%
 %%
+start_link({global, Name}, Opts) ->
+   gen_server:start_link({global, Name}, ?MODULE, [Name, Opts], []);
+
 start_link(Name, Opts) ->
-   gen_server:start_link({local, Name}, ?MODULE, [Name, Opts], []).
+   gen_server:start_link({local, Name},  ?MODULE, [Name, Opts], []).
 
 init([Name, Opts]) ->
    {ok, init(Opts, #cache{name=Name})}.
