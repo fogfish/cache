@@ -25,10 +25,10 @@ start_link() ->
 %% ===================================================================
 
 init([]) ->
-    Params = [],
+    Env = proplists:delete(included_applications, application:get_all_env()),
     {ok,
       {
          {one_for_one, 4, 1800},
-         [?CHILD(cache, worker, [Params])]
+         [?CHILD(cache, worker, [Env])]
       }
     }.
