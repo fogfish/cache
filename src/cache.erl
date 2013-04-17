@@ -1,49 +1,59 @@
 -module(cache).
--export([start/0]).
--export([start_link/2, i/1, put/3, get/2, evict/1, stop/1]).
 
+-export([
+   start_link/2, 
+   i/0, 
+   i/1, 
+   put/2, 
+   put/3, 
+   get/1, 
+   get/2, 
+   evict/0, 
+   evict/1, 
+   stop/0, 
+   stop/1
+]).
 
-start() ->
-   AppFile = code:where_is_file(atom_to_list(?MODULE) ++ ".app"),
-   {ok, [{application, _, List}]} = file:consult(AppFile), 
-   Apps = proplists:get_value(applications, List, []),
-   lists:foreach(
-      fun(X) -> 
-         ok = case application:start(X) of
-            {error, {already_started, X}} -> ok;
-            Ret -> Ret
-         end
-      end,
-      Apps
-   ),
-   application:start(?MODULE).
-
+-define(NAME, cache).
 
 %%
 %%
+start_link(Opts) ->
+   start_link(?NAME, Opts).
 start_link(Name, Opts) ->
    cache_bucket:start_link(Name, Opts).
+
+i() ->
+   i(?NAME).  
 
 i(Cache) ->
    cache_bucket:i(Cache).   
 
 %%
 %%
+put(Key, Val) ->
+   put(?NAME, Key, Val).
 put(Cache, Key, Val) ->
    cache_bucket:put(Cache, Key, Val).
 
 %%
 %%
+get(Key) ->
+   get(?NAME, Key).
 get(Cache, Key) ->
    cache_bucket:get(Cache, Key).
 
 %%
 %%
+evict() ->
+   evict(?NAME).
 evict(Cache) ->
    cache_bucket:evict(Cache).
 
 %%
 %%
+stop() ->
+   stop(?NAME).
 stop(Cache) ->
    cache_bucket:stop(Cache).
 
