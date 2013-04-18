@@ -28,7 +28,7 @@ default() ->
    end.
 
 default_cache({Name, Opts}) ->
-   supervisor:start_child(?MODULE, {
+   {ok, _} = supervisor:start_child(?MODULE, {
       Name,
       {cache, start_link, [Name, Opts]},
       permanent, 900000, worker, dynamic
