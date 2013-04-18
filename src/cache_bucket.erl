@@ -17,12 +17,13 @@
 
    n      = ?DEF_CACHE_N      :: integer(),  %% number of cells          
    ttl    = ?DEF_CACHE_TTL    :: integer(),  %% chunk time to live
-   policy = ?DEF_CACHE_POLICY :: integer(),  %% eviction policy
-   evict                      :: integer(),  %% age of heap cell (cell eviction frequency)
+   policy = ?DEF_CACHE_POLICY :: integer(),   %% eviction policy
 
    quota  = ?DEF_CACHE_QUOTA  :: integer(),  %% frequency of limit enforcement (clean-up)
    quota_size   :: integer(),  %% max number of elements
-   quota_memory :: integer()   %% max number of memory in bytes
+   quota_memory :: integer(),  %% max number of memory in bytes
+
+   counter      :: any()       %% counter functor 
 }).
 
 %%
@@ -52,19 +53,20 @@ init([{ttl, X} | Opts], S) ->
    init(Opts, S#cache{ttl = X});
 
 init([{quota, X} | Opts], S) ->
-   init(Opts, S#cache{quota=X * 1000});
+   init(Opts, S#cache{quota=X});
+
+init([{counter, X} | Opts], S) ->
+   init(Opts, S#cache{counter=X});
 
 init([_ | Opts], S) ->
    init(Opts, S);
 
 init([], S) ->
    random:seed(erlang:now()),
-   Evict = (S#cache.ttl div S#cache.n) * 1000,
-   erlang:send_after(S#cache.quota, self(), quota),
-   erlang:send_after(Evict, self(), evict),
+   set_quota_timeout(S),
+   set_evict_timeout(S),
    S#cache{
-      heap  = cache_heap:new(S#cache.n),
-      evict = Evict
+      heap  = cache_heap:new(S#cache.n)
    }.
 
 %%
@@ -83,7 +85,14 @@ handle_call({put, Key, Val}, _, S) ->
    {reply, ok, insert(Key, Val, S)};
 
 handle_call({get, Key}, _, S) ->
-   {reply, lookup(Key, S), S};
+   case lookup(Key, S) of
+      undefined ->
+         inc_counter(miss, S),
+         {reply, undefined, S};
+      Val ->
+         inc_counter(hit, S),
+         {reply, Val, S}
+   end;
 
 handle_call({has, Key}, _, S) ->
    case member(Key, S) of
@@ -115,11 +124,11 @@ handle_cast(_, S) ->
    {noreply, S}.
 
 handle_info(evict, S) ->
-   erlang:send_after(S#cache.evict, self(), evict),
+   set_evict_timeout(S),
    {noreply, evict(S)};
 
 handle_info(quota, S) ->
-   erlang:send_after(S#cache.quota, self(), quota),
+   set_quota_timeout(S),
    {noreply, quota(S)};
 
 handle_info(_, S) ->
@@ -136,6 +145,28 @@ code_change(_Vsn, S, _Extra) ->
 %%% private
 %%%
 %%%----------------------------------------------------------------------------   
+
+%% set-up cache evict timeout
+set_evict_timeout(#cache{ttl=undefined}) ->
+   ok;
+set_evict_timeout(S) ->
+   T = (S#cache.ttl div S#cache.n) * 1000,
+   erlang:send_after(T, self(), evict).
+
+set_quota_timeout(#cache{quota=undefined}) ->
+   ok;
+set_quota_timeout(S) ->
+   T = S#cache.quota * 1000,
+   erlang:send_after(T, self(), quota).
+
+%% update statistic
+inc_counter(_Id, #cache{counter=undefined}) ->
+   ok;
+inc_counter(Id,  #cache{counter={M, F}, name=Name}) ->
+   M:F({cache, Name, Id});
+inc_counter(Id,  #cache{counter=Fun, name=Name}) ->
+   Fun({cache, Name, Id}).
+
 
 %%
 %% evict key from cells 
@@ -159,6 +190,7 @@ insert(Key, Val, #cache{}=S) ->
    [Head | Tail] = cache_heap:cells(S#cache.heap),
    true = ets:insert(Head, {Key, Val}),
    _    = evict_key(Key, Tail),
+   inc_counter(put, S),
    ?DEBUG("cache ~p: put ~p to cell ~p~n", [S#cache.name, Key, Head]),
    S.
 
