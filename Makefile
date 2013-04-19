@@ -27,7 +27,7 @@ dialyzer: compile
 	@dialyzer -Wno_return -c ./ebin
 
 run:
-	erl -name cache@127.0.0.1 -setcookie cache -pa ./deps/*/ebin -pa ./ebin
+	erl -name cache@127.0.0.1 -setcookie nocookie -pa ./deps/*/ebin -pa ./ebin
 
 rebar:
 	curl -O http://cloud.github.com/downloads/basho/rebar/rebar

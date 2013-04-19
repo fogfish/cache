@@ -16,4 +16,4 @@
 -define(DEF_CACHE_N,      10).
 
 %% default cache house keeping frequency
--define(DEF_CACHE_QUOTA, 5000). 
+-define(DEF_CACHE_QUOTA,   5). 
