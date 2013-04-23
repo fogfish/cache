@@ -19,6 +19,9 @@
 
 %%
 %%
+start_link([]) ->
+    Env = proplists:delete(included_applications, application:get_all_env()),
+    start_link(?NAME, Env);
 start_link(Opts) ->
     start_link(?NAME, Opts).
 start_link(Name, Opts) ->

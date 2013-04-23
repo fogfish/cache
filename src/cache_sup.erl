@@ -11,7 +11,7 @@
 -export([init/1]).
 
 %% Helper macro for declaring children of supervisor
--define(CHILD(I, Type, Params), {I, {I, start_link, Params}, permanent, 5000, Type, [I]}).
+-define(CHILD(I, Type), {I, {I, start_link, []}, permanent, 5000, Type, [I]}).
 
 %% ===================================================================
 %% API functions
@@ -25,10 +25,9 @@ start_link() ->
 %% ===================================================================
 
 init([]) ->
-    Env = proplists:delete(included_applications, application:get_all_env()),
     {ok,
       {
          {one_for_one, 4, 1800},
-         [?CHILD(cache, worker, [Env])]
+         [?CHILD(cache, worker)]
       }
     }.
