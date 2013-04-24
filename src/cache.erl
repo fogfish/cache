@@ -2,7 +2,9 @@
 
 -export([
    start_link/2, drop/1, i/1,
-   put/3, put_/3, get/2, has/2, remove/2, remove_/2
+   put/3, put/4, put_/3, put_/4, 
+   get/2, has/2, 
+   remove/2, remove_/2
 ]).
 
 %%
@@ -23,10 +25,14 @@ i(Cache) ->
 %%
 %%
 put(Cache, Key, Val) ->
-   gen_server:call(Cache, {put, Key, Val}).
+   cache:put(Cache, Key, Val, undefined).
+put(Cache, Key, Val, TTL) ->
+   gen_server:call(Cache, {put, Key, Val, TTL}).
 
 put_(Cache, Key, Val) ->
-   gen_server:cast(Cache, {put, Key, Val}).
+   cache:put_(Cache, Key, Val, undefined).
+put_(Cache, Key, Val, TTL) ->
+   gen_server:cast(Cache, {put, Key, Val, TTL}).
 
 %%
 %%

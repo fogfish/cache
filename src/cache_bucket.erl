@@ -81,7 +81,7 @@ terminate(_Reason, S) ->
 %%%
 %%%----------------------------------------------------------------------------   
 
-handle_call({put, Key, Val}, _, S) ->
+handle_call({put, Key, Val, _}, _, S) ->
    {reply, ok, insert(Key, Val, S)};
 
 handle_call({get, Key}, _, S) ->
@@ -114,7 +114,7 @@ handle_call(_, _, S) ->
 
 %%
 %%
-handle_cast({put, Key, Val}, S) ->
+handle_cast({put, Key, Val, _}, S) ->
    {noreply, insert(Key, Val, S)};
 
 handle_cast({remove, Key}, S) ->
