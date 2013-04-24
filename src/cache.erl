@@ -1,6 +1,7 @@
 -module(cache).
 
 -export([
+    start_link/0,
     start_link/1,
     start_link/2, 
     i/0, 
@@ -19,11 +20,13 @@
 
 %%
 %%
-start_link([]) ->
+start_link() ->
     Env = proplists:delete(included_applications, application:get_all_env()),
-    start_link(?NAME, Env);
+    start_link(?NAME, Env).
+    
 start_link(Opts) ->
     start_link(?NAME, Opts).
+
 start_link(Name, Opts) ->
     cache_bucket:start_link(Name, Opts).
 
