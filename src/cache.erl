@@ -25,12 +25,13 @@ i(Cache) ->
 %%
 %%
 put(Cache, Key, Val) ->
-   cache:put(Cache, Key, Val, undefined).
+   gen_server:call(Cache, {put, Key, Val}).
 put(Cache, Key, Val, TTL) ->
    gen_server:call(Cache, {put, Key, Val, TTL}).
 
 put_(Cache, Key, Val) ->
-   cache:put_(Cache, Key, Val, undefined).
+   gen_server:cast(Cache, {put, Key, Val}).
+
 put_(Cache, Key, Val, TTL) ->
    gen_server:cast(Cache, {put, Key, Val, TTL}).
 
