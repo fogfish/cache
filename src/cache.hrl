@@ -17,3 +17,5 @@
 
 %% default cache house keeping frequency
 -define(DEF_CACHE_QUOTA,   5). 
+
+-define(DEF_IO_TIMEOUT,60000).
