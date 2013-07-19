@@ -4,7 +4,7 @@
 -author('Dmitry Kolesnikov <dmkolesnikov@gmail.com>').
 
 -export([start_link/2]).
--export([i/1, put/3, get/2, evict/1, stop/1]).
+-export([i/1, put/3, put_ttl/4, get/2, evict/1, stop/1]).
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2, code_change/3]).
 
 -define(DEFAULT_POLICY,     lru).
@@ -85,6 +85,9 @@ i(Cache) ->
 put(Cache, Key, Val) ->
 	gen_server:cast(Cache, {put, Key, Val}).
 
+put_ttl(Cache, Key, Val, TTL) ->
+   gen_server:cast(Cache, {put, Key, Val, TTL}).
+
 get(Cache, Key) ->
    gen_server:call(Cache, {get, Key}, infinity).
 
@@ -113,16 +116,16 @@ handle_call(info, _Tx,  #cache{elements=E, access=A, hit=Hit, miss=Miss}=S) ->
    ],
    {reply, {ok, Info}, S};
 
-handle_call({get, Key}, _Tx, #cache{ttl=TTL, elements=E, access=A, hit=Hit, miss=Miss}=S) ->
+handle_call({get, Key}, _Tx, #cache{elements=E, access=A, hit=Hit, miss=Miss}=S) ->
    Now = usec(),
    case ets:lookup(E, Key) of
    	[] -> 
    	   {reply, none, S#cache{miss=Miss + 1}};
-   	[{Key, _Val, Expire0}] when Expire0 =< Now ->
+   	[{Key, _Val, Expire0, _TTL}] when Expire0 =< Now ->
    	   {reply, none, S#cache{miss=Miss + 1}};
-   	[{Key, Val, Expire0}] ->
+   	[{Key, Val, Expire0, TTL}] ->
    	   Expire = Now + TTL,
-   		ets:insert(E, {Key, Val, Expire}),
+   		ets:insert(E, {Key, Val, Expire, TTL}),
    		ets:delete(A, Expire0),
    		ets:insert(A, {Expire, Key}),
    	   {reply, {ok, Val}, S#cache{hit=Hit + 1}}
@@ -136,9 +139,15 @@ handle_call(_Req,  _Tx, S) ->
 
 %%
 %%
+handle_cast({put, Key, Val, TTL}, #cache{elements=E, access=A}=S) ->
+   Expire = usec() + TTL,
+   ets:insert(E, {Key, Val, Expire, TTL}),
+   ets:insert(A, {Expire, Key}),
+   {noreply, S};
+
 handle_cast({put, Key, Val}, #cache{ttl=TTL, elements=E, access=A}=S) ->
    Expire = usec() + TTL,
-   ets:insert(E, {Key, Val, Expire}),
+   ets:insert(E, {Key, Val, Expire, TTL}),
    ets:insert(A, {Expire, Key}),
    {noreply, S};
 
@@ -182,7 +191,7 @@ code_change(_Vsn, S, _Extra) ->
 %%
 %%
 usec() ->
-   {Mega, Sec, USec} = erlang:now(),
+   {Mega, Sec, USec} = os:timestamp(),
    (Mega * 1000000 + Sec) * 1000000 + USec.
 
 %%
