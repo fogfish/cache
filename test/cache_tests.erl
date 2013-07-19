@@ -54,6 +54,21 @@ lifecyle_3_test() ->
    {ok, val4} = cache:get(test, key4),
    cache:stop(test).
 
+lifecyle_ttl_test() ->
+   cache:start(),
+   ok = cache:put_ttl(key1, val1, 1),
+   ok = cache:put_ttl(key2, val2, 1),
+   timer:sleep(1000),
+   ok = cache:put_ttl(key3, val3, 1),   
+   ok = cache:put_ttl(key4, val4, 1),
+   timer:sleep(950),
+
+   none = cache:get(key1),
+   none = cache:get(key2),
+   {ok, val3} = cache:get(key3),
+   {ok, val4} = cache:get(key4),
+   cache:stop().
+
 evict_lru_1_test() ->
    cache:start(),
    {ok, _} = cache:start_link(test, [
