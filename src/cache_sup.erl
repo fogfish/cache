@@ -27,7 +27,10 @@
 %%
 start_link() ->
    {ok, Sup} = supervisor:start_link({local, ?MODULE}, ?MODULE, []),
-   lists:foreach(fun default_cache/1, default()),
+   lists:foreach(
+      fun default_cache/1,
+      proplists:delete(included_applications, application:get_all_env())
+   ),
    {ok, Sup}.
    
 init([]) -> 
@@ -39,13 +42,7 @@ init([]) ->
    }.
 
 %%
-%% create default caches
-default() ->
-   case application:get_env(cache, default) of
-      undefined -> [];
-      {ok, Val} -> Val
-   end.
-
+%% create default cache
 default_cache({Name, Opts}) ->
    {ok, _} = supervisor:start_child(?MODULE, {
       Name,
