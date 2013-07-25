@@ -28,14 +28,21 @@
    drop/1,
    i/1,
    heap/2,
-   put/3, put/4, put_/3, put_/4,
-   get/2, lookup/2,
-   has/2, ttl/2,
-   remove/2, remove_/2
+   put/3, 
+   put/4, 
+   put_/3, 
+   put_/4,
+   get/2, 
+   lookup/2,
+   has/2, 
+   ttl/2,
+   remove/2, 
+   remove_/2
 ]).
 
 -type(key()    :: any()).
 -type(entity() :: any()).
+-type(ttl()    :: integer()).
 
 %%
 %% start new cache
@@ -70,16 +77,18 @@ heap(Cache, N) ->
 %% put entity to cache
 -spec(put/3  :: (atom(), key(), entity()) -> ok).
 -spec(put_/3 :: (atom(), key(), entity()) -> ok).
--spec(put/4  :: (atom(), key(), entity(), integer()) -> ok).
--spec(put_/4 :: (atom(), key(), entity(), integer()) -> ok).
+-spec(put/4  :: (atom(), key(), entity(), ttl()) -> ok).
+-spec(put_/4 :: (atom(), key(), entity(), ttl()) -> ok).
 
 put(Cache, Key, Val) ->
-   gen_server:call(Cache, {put, Key, Val}, ?DEF_IO_TIMEOUT).
+   gen_server:call(Cache, {put, Key, Val}, ?DEF_CACHE_TIMEOUT).
+
 put(Cache, Key, Val, TTL) ->
-   gen_server:call(Cache, {put, Key, Val, TTL}, ?DEF_IO_TIMEOUT).
+   gen_server:call(Cache, {put, Key, Val, TTL}, ?DEF_CACHE_TIMEOUT).
 
 put_(Cache, Key, Val) ->
    gen_server:cast(Cache, {put, Key, Val}).
+
 put_(Cache, Key, Val, TTL) ->
    gen_server:cast(Cache, {put, Key, Val, TTL}).
 
@@ -88,28 +97,28 @@ put_(Cache, Key, Val, TTL) ->
 -spec(get/2 :: (atom(), key()) -> entity() | undefined).
 
 get(Cache, Key) ->
-   gen_server:call(Cache, {get, Key}, ?DEF_IO_TIMEOUT).
+   gen_server:call(Cache, {get, Key}, ?DEF_CACHE_TIMEOUT).
 
 %%
 %% lookup entity at cache do not prolong ttl
 -spec(lookup/2 :: (atom(), key()) -> entity() | undefined).
 
 lookup(Cache, Key) ->
-   gen_server:call(Cache, {lookup, Key}, ?DEF_IO_TIMEOUT).
+   gen_server:call(Cache, {lookup, Key}, ?DEF_CACHE_TIMEOUT).
 
 %%
 %% check entity at cache
 -spec(has/2 :: (atom(), key()) -> true | false).
 
 has(Cache, Key) ->
-   gen_server:call(Cache, {has, Key}, ?DEF_IO_TIMEOUT).
+   gen_server:call(Cache, {has, Key}, ?DEF_CACHE_TIMEOUT).
 
 %%
 %% check entity at cache and return estimated ttl
--spec(ttl/2 :: (atom(), key()) -> true | false).
+-spec(ttl/2 :: (atom(), key()) -> ttl() | false).
 
 ttl(Cache, Key) ->
-   gen_server:call(Cache, {ttl, Key}, ?DEF_IO_TIMEOUT).
+   gen_server:call(Cache, {ttl, Key}, ?DEF_CACHE_TIMEOUT).
 
 %%
 %% remove entity from cache
@@ -117,12 +126,10 @@ ttl(Cache, Key) ->
 -spec(remove_/2 :: (atom(), key()) -> ok).
 
 remove(Cache, Key) ->
-   gen_server:call(Cache, {remove, Key}, ?DEF_IO_TIMEOUT).
+   gen_server:call(Cache, {remove, Key}, ?DEF_CACHE_TIMEOUT).
 
 remove_(Cache, Key) ->
    gen_server:cast(Cache, {remove, Key}).
-
-
 
 
 

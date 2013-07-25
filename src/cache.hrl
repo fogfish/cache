@@ -7,7 +7,6 @@
    -define(DEBUG(Str, Args), ok).
 -endif.
 
-
 %% default cache eviction policy
 -define(DEF_CACHE_POLICY, lru).
 
@@ -18,4 +17,5 @@
 %% default cache house keeping frequency
 -define(DEF_CACHE_QUOTA,   5). 
 
--define(DEF_IO_TIMEOUT,60000).
+%% default cache i/o timeout
+-define(DEF_CACHE_TIMEOUT, 60000).
