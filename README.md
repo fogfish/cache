@@ -15,7 +15,7 @@ The downside is inability to assign precise TTL per single cache entry. TTL is a
 ## Usage
 
 ```erlang
-	application:start(cache).
+   application:start(cache).
    {ok, _} = cache:start_link(my_cache, [{n, 10}, {ttl, 60}]).
    
    ok  = cache:put(my_cache, <<"my key">>, <<"my value">>).
@@ -42,7 +42,7 @@ Therefore, frequent read/write of large entries might impact on overall Erlang p
 
 The global cache instance is visible to all Erlang nodes in the cluster.
 ```erlang
-	%% at a@example.com
+   %% at a@example.com
    {ok, _} = cache:start_link({global, my_cache}, [{n, 10}, {ttl, 60}]).
    Val = cache:get({global, my_cache}, <<"my key">>).
    
@@ -67,9 +67,15 @@ The local cache instance is accessible for any Erlang nodes in the cluster.
 ## Performance
 
    MacBook Pro, Intel Core i5, 2.5GHz, 8GB 1600 MHz DDR3, 256 SSD
+
+
    LRU Cache, 10 segments, 20 sec ttl (~2 sec per segment)
 
+
+   Local cache (application and cache within same VM)
    ![Local cache (application and cache within same VM)](local.png)
+
+   Distributed cache (application  and cache runs in different VMs)
    ![Distributed cache (application  and cache runs in different VMs)](distributed.png)
 
 ## Contributors
