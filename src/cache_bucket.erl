@@ -1,52 +1,55 @@
 %%
-%%   Copyright (c) 2012, Dmitry Kolesnikov
-%%   All Rights Reserved.
+%%   Copyright 2012 Dmitry Kolesnikov, All Rights Reserved
 %%
-%%  This library is free software; you can redistribute it and/or modify
-%%  it under the terms of the GNU Lesser General Public License, version 3.0
-%%  as published by the Free Software Foundation (the "License").
+%%   Licensed under the Apache License, Version 2.0 (the "License");
+%%   you may not use this file except in compliance with the License.
+%%   You may obtain a copy of the License at
 %%
-%%  Software distributed under the License is distributed on an "AS IS"
-%%  basis, WITHOUT WARRANTY OF ANY KIND, either express or implied. See
-%%  the License for the specific language governing rights and limitations
-%%  under the License.
-%% 
-%%  You should have received a copy of the GNU Lesser General Public
-%%  License along with this library; if not, write to the Free Software
-%%  Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307
-%%  USA or retrieve online http://www.opensource.org/licenses/lgpl-3.0.html
+%%       http://www.apache.org/licenses/LICENSE-2.0
+%%
+%%   Unless required by applicable law or agreed to in writing, software
+%%   distributed under the License is distributed on an "AS IS" BASIS,
+%%   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+%%   See the License for the specific language governing permissions and
+%%   limitations under the License.
 %%
 %%  @description
-%%
+%%   cache bucket process
 -module(cache_bucket).
 -behaviour(gen_server).
 -author('Dmitry Kolesnikov <dmkolesnikov@gmail.com>').
+
 -include("cache.hrl").
 
 -export([
    start_link/2,
-   init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2, code_change/3
+   init/1, 
+   terminate/2,
+   handle_call/3, 
+   handle_cast/2, 
+   handle_info/2,
+   code_change/3
 ]).
 
-%%
-%%
+%% internal bucket state
 -record(cache, {
-   name          :: atom(),     %% name of cache bucket
-   heap   = []   :: list(),     %% cache heap segments
+   name   = undefined  :: atom(),     %% name of cache bucket
+   heap   = []         :: list(),     %% cache heap segments
 
    n      = ?DEF_CACHE_N      :: integer(),  %% number of segments          
-   ttl    = ?DEF_CACHE_TTL    :: integer(),  %% chunk time to live
+   ttl    = ?DEF_CACHE_TTL    :: integer(),  %% cache time to live
    policy = ?DEF_CACHE_POLICY :: integer(),  %% eviction policy
 
-   cardinality  :: integer(),  %% cache cardinality
-   memory       :: integer(),  %% cache memory limit
+   cardinality = undefined :: integer(),  %% cache cardinality
+   memory      = undefined :: integer(),  %% cache memory limit
 
    quota  = ?DEF_CACHE_QUOTA  :: integer(),  %% quota enforcement timer
    evict  = undefined,                       %% evict timer
 
-   stats        :: any()       %% stats functor 
+   stats  = undefined   :: any()       %% stats aggregation functor 
 }).
 
+%% cache segment
 -record(heap, {
    id           :: integer(),   %% segment heap
    expire       :: integer(),   %% segment expire time
@@ -54,8 +57,12 @@
    memory       :: integer()    %% segment memory quota
 }).
 
-%%
-%%
+%%%----------------------------------------------------------------------------   
+%%%
+%%% Factory
+%%%
+%%%----------------------------------------------------------------------------   
+
 start_link({global, Name}, Opts) ->
    gen_server:start_link({global, Name}, ?MODULE, [Name, Opts], []);
 
@@ -90,7 +97,7 @@ init([_ | Opts], S) ->
    init(Opts, S);
 
 init([], S) ->
-   random:seed(erlang:now()),
+   random:seed(os:timestamp()),
    Evict = cache_util:mdiv(S#cache.ttl, S#cache.n),
    init_heap(
       S#cache{
@@ -102,7 +109,6 @@ init([], S) ->
 %%
 %%     
 terminate(_Reason, _S) ->
-   %cache_heap:free(S#cache.heap),
    ok.
 
 %%%----------------------------------------------------------------------------   
@@ -164,6 +170,8 @@ handle_cast({remove, Key}, S) ->
 handle_cast(_, S) ->
    {noreply, S}.
 
+%%
+%%
 handle_info(evict, S) ->
    Now = cache_util:now(),
    case lists:last(S#cache.heap) of
@@ -188,13 +196,13 @@ handle_info(quota, S) ->
             N when N =:= S#cache.n ->
                {noreply,
                   free_heap(
-                     S#cache{quota = cache_util:timeout(S#cache.evict, quota)}
+                     S#cache{quota = cache_util:timeout(S#cache.quota, quota)}
                   )
                };
             _ ->
                {noreply,
                   init_heap(
-                     S#cache{quota = cache_util:timeout(S#cache.evict, quota)}
+                     S#cache{quota = cache_util:timeout(S#cache.quota, quota)}
                   )
                }
          end;
@@ -234,8 +242,8 @@ cache_put(Key, Val, #cache{}=S) ->
    ?DEBUG("cache ~p: put ~p to heap ~p~n", [S#cache.name, Key, Head#heap.id]),
    S.
 
-cache_put(Key, Val, Time, #cache{}=S) ->
-   case lists:splitwith(fun(X) -> X#heap.expire > Time end, S#cache.heap) of
+cache_put(Key, Val, Expire, #cache{}=S) ->
+   case lists:splitwith(fun(X) -> X#heap.expire > Expire end, S#cache.heap) of
       {[],  _Tail} ->
          cache_put(Key, Val, S);
       {Head, Tail} ->
@@ -250,18 +258,13 @@ cache_put(Key, Val, Time, #cache{}=S) ->
          S
    end.
 
+%%
+%% get cache value
 cache_get(Key, #cache{policy=mru}=S) ->
+   % cache MRU should not move key anywhere because
    % cache always evicts last generation
-   % MRU caches do not prolong recently used entity
-   case heap_lookup(Key, S#cache.heap) of
-      undefined   ->
-         cache_util:stats(S#cache.stats, {cache, S#cache.name, miss}),
-         undefined;
-      {_Heap, Val} ->
-         ?DEBUG("cache ~p: get ~p at cell ~p~n", [S#cache.name, Key, Heap#heap.id]),
-         cache_util:stats(S#cache.stats, {cache, S#cache.name, hit}),
-         Val
-   end;
+   % fall-back to cache lookup
+   cache_lookup(Key, S);
 
 cache_get(Key, #cache{}=S) ->
    Head = hd(S#cache.heap),
@@ -281,6 +284,8 @@ cache_get(Key, #cache{}=S) ->
          Val
    end.
 
+%%
+%% lookup cache value
 cache_lookup(Key, #cache{}=S) ->
    case heap_lookup(Key, S#cache.heap) of
       undefined   ->
@@ -292,6 +297,8 @@ cache_lookup(Key, #cache{}=S) ->
          Val
    end.
 
+%%
+%% check if key exists
 cache_has(Key, #cache{}=S) ->
    case heap_has(Key, S#cache.heap) of
       false   ->
@@ -301,6 +308,8 @@ cache_has(Key, #cache{}=S) ->
          true
    end.
 
+%%
+%% check key ttl
 cache_ttl(Key, #cache{}=S) ->
    case heap_has(Key, S#cache.heap) of
       false   ->
@@ -309,6 +318,8 @@ cache_ttl(Key, #cache{}=S) ->
          Heap#heap.expire - cache_util:now()
    end.
 
+%%
+%%
 cache_remove(Key, #cache{}=S) ->
    lists:foreach(
       fun(X) -> ets:delete(X#heap.id, Key) end,
@@ -341,22 +352,6 @@ heap_has(_Key, []) ->
    false.
 
 
-% %%
-% %%
-% remove(Key, S) ->
-%    Cell = evict_key(Key, cache_heap:cells(S#cache.heap)),
-%    ?DEBUG("cache ~p: remove ~p in cell ~p~n", [S#cache.name, Key, Cell]),
-%    S.
-
-% %%
-% %%
-% member(Key, S) ->
-%    dowhile(
-%       fun(X) -> ets:member(X, Key) end,
-%       cache_heap:cells(S#cache.heap)
-%    ).  
-
-
 %%
 %% init cache heap
 init_heap(#cache{}=S) ->
@@ -387,7 +382,7 @@ free_heap(#cache{}=S) ->
    ).
    
 %%
-%%
+%% heap policy check
 is_heap_out_of_quota(#heap{}=H) ->
    is_out_of_memory(H) orelse is_out_of_capacity(H).
 

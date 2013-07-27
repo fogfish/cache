@@ -1,23 +1,20 @@
 %%
-%%   Copyright (c) 2012, Dmitry Kolesnikov
-%%   All Rights Reserved.
+%%   Copyright 2012 Dmitry Kolesnikov, All Rights Reserved
 %%
-%%  This library is free software; you can redistribute it and/or modify
-%%  it under the terms of the GNU Lesser General Public License, version 3.0
-%%  as published by the Free Software Foundation (the "License").
+%%   Licensed under the Apache License, Version 2.0 (the "License");
+%%   you may not use this file except in compliance with the License.
+%%   You may obtain a copy of the License at
 %%
-%%  Software distributed under the License is distributed on an "AS IS"
-%%  basis, WITHOUT WARRANTY OF ANY KIND, either express or implied. See
-%%  the License for the specific language governing rights and limitations
-%%  under the License.
-%% 
-%%  You should have received a copy of the GNU Lesser General Public
-%%  License along with this library; if not, write to the Free Software
-%%  Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307
-%%  USA or retrieve online http://www.opensource.org/licenses/lgpl-3.0.html
+%%       http://www.apache.org/licenses/LICENSE-2.0
+%%
+%%   Unless required by applicable law or agreed to in writing, software
+%%   distributed under the License is distributed on an "AS IS" BASIS,
+%%   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+%%   See the License for the specific language governing permissions and
+%%   limitations under the License.
 %%
 %%  @description
-%%
+%%   cache utility
 -module(cache_util).
 
 -export([
@@ -25,31 +22,33 @@
 ]).
 
 %%
-%%
-mdiv(undefined, _) ->
+%% maybe div
+mdiv(X, Y)
+ when X =:= undefined orelse Y =:= undefined ->
    undefined;
 mdiv(X, Y) ->
    X div Y.
 
 %%
-%%
-madd(undefined, _) ->
+%% maybe add
+madd(X, Y)
+ when X =:= undefined orelse Y =:= undefined ->
    undefined;
 madd(X, Y) ->
    X + Y.
 
 %%
-%%
-mmul(undefined, _) ->
+%% maybe multiply
+mmul(X, Y)
+ when X =:= undefined orelse Y =:= undefined ->
    undefined;
 mmul(X, Y) ->
    X * Y.
 
-
 %%
 %%
 now() ->
-   {Mega, Sec, _} = erlang:now(),
+   {Mega, Sec, _} = os:timestamp(),
    Mega * 1000000 + Sec.   
 
 %%
@@ -71,9 +70,7 @@ stats(Fun,    Counter, Val)
    Fun(Counter, Val).
 
 %%
-%%
-%%
-%% re-set alarm after time
+%% set / reset timeout
 timeout(T, Msg)
  when is_integer(T) ->
    {clock, T, erlang:send_after(T, self(), Msg)};

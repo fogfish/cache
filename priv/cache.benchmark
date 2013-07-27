@@ -6,7 +6,7 @@
 %%
 %% workload
 {mode,           max}.
-{duration,         1}.
+{duration,         5}.
 {concurrent,      10}.
 {key_generator,   {uniform_int, 1000000}}.
 {value_generator, {fixed_bin, 1000}}.
@@ -14,7 +14,6 @@
 {operations, [
    {put,    5} 
   ,{get,    5}
- %,{remove, 1} 
 ]}.
 
 %{cache, {mycache, 'cache@127.0.0.1'}}.
@@ -22,6 +21,4 @@
    {ttl,     20}
   ,{n,       10} 
   ,{policy, lru}
-  %,{size,   500000}
-  %,{memory, 400000000}
 ]}.

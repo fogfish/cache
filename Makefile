@@ -1,5 +1,17 @@
 .PHONY: deps test
 
+ifeq ($(id),)
+export id=cache
+endif
+
+FLAGS=\
+        -name ${id}@127.0.0.1 \
+        -setcookie nocookie \
+        -pa ./deps/*/ebin \
+        -pa ./examples/*/ebin \
+        -pa ./ebin \
+        +K true +A 160 -sbt ts
+
 BB=../basho_bench
 
 all: rebar deps compile
@@ -27,15 +39,19 @@ dialyzer: compile
 	@dialyzer -Wno_return -c ./ebin
 
 run:
-	erl -name cache@127.0.0.1 -setcookie nocookie -pa ./deps/*/ebin -pa ./ebin
+	erl ${FLAGS}
 
 rebar:
 	curl -O http://cloud.github.com/downloads/basho/rebar/rebar
 	chmod ugo+x rebar
 
 benchmark:
-	$(BB)/basho_bench priv/cache.benchmark
+	$(BB)/basho_bench -N bb@127.0.0.0 -C nocookie -J ${id}@127.0.0.1 priv/${id}.benchmark
 	$(BB)/priv/summary.r -i tests/current
 	open tests/current/summary.png
 
+# benchmark:
+# 	$(BB)/basho_bench -N bb@127.0.0.0 -C nocookie -J ${id}@127.0.0.1 priv/${id}.benchmark
+# 	$(BB)/priv/summary.r -i tests/current
+# 	open tests/current/summary.png
 

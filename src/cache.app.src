@@ -1,9 +1,10 @@
 {application, cache,
    [
       {description, "in-memory cache"},
-      {vsn,         "0.3.0"},
+      {vsn,         "0.8.0"},
       {modules,     [
          cache,
+         cache_bucket,
          cache_sup, 
          cache_app
       ]},
