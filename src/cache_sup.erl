@@ -18,11 +18,18 @@
 -module(cache_sup).
 -behaviour(supervisor).
 -author('Dmitry Kolesnikov <dmkolesnikov@gmail.com>').
+-author('Jose Luis Navarro <jlnavarro@gmail.com>').
 
--export([start_link/0, init/1]).
+%% API
+-export([start_link/0]).
 
-%%
-%%
+%% Supervisor callbacks
+-export([init/1]).
+
+%% ===================================================================
+%% API functions
+%% ===================================================================
+
 start_link() ->
    {ok, Sup} = supervisor:start_link({local, ?MODULE}, ?MODULE, []),
    lists:foreach(
@@ -31,8 +38,12 @@ start_link() ->
    ),
    {ok, Sup}.
    
-init([]) -> 
-   {ok,
+%% ===================================================================
+%% Supervisor callbacks
+%% ===================================================================
+
+init([]) ->
+    {ok,
       {
          {one_for_one, 4, 1800},
          []

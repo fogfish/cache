@@ -175,7 +175,3 @@ remove(Cache, Key) ->
 remove_(Cache, Key) ->
    gen_server:cast(Cache, {remove, Key}).
 
-
-
-
-
