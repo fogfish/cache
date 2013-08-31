@@ -138,6 +138,60 @@ handle_call({ttl, Key}, _, S) ->
 handle_call({remove, Key}, _, S) ->
    {reply, ok, cache_remove(Key, S)};
 
+handle_call({add, Key, Val}, _, S) ->
+   case cache_has(Key, S) of
+      true  ->
+         {reply, conflict, S};
+      false ->
+         {reply, ok, cache_put(Key, Val, S)}
+   end;
+
+handle_call({add, Key, Val, TTL}, _, S) ->
+   case cache_has(Key, S) of
+      true  ->
+         {reply, conflict, S};
+      false ->
+         {reply, ok, cache_put(Key, Val, cache_util:now() + TTL, S)}
+   end;
+
+handle_call({replace, Key, Val}, _, S) ->
+   case cache_has(Key, S) of
+      true  ->
+         {reply, ok, cache_put(Key, Val, S)};
+      false ->
+         {reply, not_found, S}
+   end;
+
+handle_call({replace, Key, Val, TTL}, _, S) ->
+   case cache_has(Key, S) of
+      true  ->
+         {reply, ok, cache_put(Key, Val, cache_util:now() + TTL, S)};
+      false ->
+         {reply, not_found, S}
+   end;
+
+handle_call({prepend, Key, Val}, _, S) ->
+   % @todo: reduce one write
+   case cache_get(Key, S) of
+      undefined  ->
+         {reply, ok, cache_put(Key, [Val], S)};
+      X when is_list(X) ->
+         {reply, ok, cache_put(Key, [Val|X], S)};
+      X ->
+         {reply, ok, cache_put(Key, [Val,X], S)}
+   end;
+
+handle_call({append, Key, Val}, _, S) ->
+   % @todo: reduce one write
+   case cache_get(Key, S) of
+      undefined  ->
+         {reply, ok, cache_put(Key, [Val], S)};
+      X when is_list(X) ->
+         {reply, ok, cache_put(Key, X++[Val], S)};
+      X ->
+         {reply, ok, cache_put(Key, [X, Val], S)}
+   end;
+
 handle_call(i, _, S) ->
    Heap   = [X#heap.id     || X <- S#cache.heap],
    Expire = [X#heap.expire || X <- S#cache.heap],
@@ -166,6 +220,60 @@ handle_cast({put, Key, Val, TTL}, S) ->
 
 handle_cast({remove, Key}, S) ->
    {noreply, cache_remove(Key, S)};
+
+handle_cast({add, Key, Val}, S) ->
+   case cache_has(Key, S) of
+      true  ->
+         {noreply, S};
+      false ->
+         {noreply, cache_put(Key, Val, S)}
+   end;
+
+handle_cast({add, Key, Val, TTL}, S) ->
+   case cache_has(Key, S) of
+      true  ->
+         {noreply, S};
+      false ->
+         {noreply, cache_put(Key, Val, cache_util:now() + TTL, S)}
+   end;
+
+handle_cast({replace, Key, Val}, S) ->
+   case cache_has(Key, S) of
+      true  ->
+         {noreply, cache_put(Key, Val, S)};
+      false ->
+         {noreply, S}
+   end;
+
+handle_cast({replace, Key, Val, TTL}, S) ->
+   case cache_has(Key, S) of
+      true  ->
+         {noreply, cache_put(Key, Val, cache_util:now() + TTL, S)};
+      false ->
+         {noreply, S}
+   end;
+
+handle_cast({prepend, Key, Val}, S) ->
+   % @todo: reduce one write
+   case cache_get(Key, S) of
+      undefined  ->
+         {noreply, cache_put(Key, [Val], S)};
+      X when is_list(X) ->
+         {noreply, cache_put(Key, [Val|X], S)};
+      X ->
+         {noreply, cache_put(Key, [Val,X], S)}
+   end;
+
+handle_cast({append, Key, Val}, S) ->
+   % @todo: reduce one write
+   case cache_get(Key, S) of
+      undefined  ->
+         {noreply, cache_put(Key, [Val], S)};
+      X when is_list(X) ->
+         {noreply, cache_put(Key, X++[Val], S)};
+      X ->
+         {noreply, cache_put(Key, [X, Val], S)}
+   end;
 
 handle_cast(_, S) ->
    {noreply, S}.

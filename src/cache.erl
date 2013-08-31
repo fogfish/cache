@@ -22,9 +22,9 @@
 %%      * cache lookup items from youngest to oldest segment  
 %%
 %%  @todo
+%%   * procedure to get / lookup multiple keys (e.g. get_, getm, ...)
 %%   * unit tests (improve coverage)
 %%   * cache read/write through handler
-%%   * cache atomic update (in-place update)
 %%   * memcached protocol 
 -module(cache).
 -author('Dmitry Kolesnikov <dmkolesnikov@gmail.com>').
@@ -46,7 +46,26 @@
    has/2, 
    ttl/2,
    remove/2, 
-   remove_/2
+   remove_/2,
+   % memecached like interface
+   set/3,
+   set/4,
+   set_/3,
+   set_/4,
+   add/3,
+   add/4,
+   add_/3,
+   add_/4,
+   replace/3,
+   replace/4,
+   replace_/3,
+   replace_/4,
+   append/3,
+   append_/3,
+   prepend/3,
+   prepend_/3,
+   delete/2,
+   delete_/2
 ]).
 
 -export_type([cache/0]).
@@ -174,4 +193,125 @@ remove(Cache, Key) ->
 
 remove_(Cache, Key) ->
    gen_server:cast(Cache, {remove, Key}).
+
+
+%%%----------------------------------------------------------------------------   
+%%%
+%%% memcached-like interface
+%%%
+%%%----------------------------------------------------------------------------   
+
+%%
+%% synchronous store key/val
+-spec(set/3  :: (cache(), key(), entity()) -> ok).
+-spec(set/4  :: (cache(), key(), entity(), ttl()) -> ok).
+
+set(Cache, Key, Val) ->
+   cache:put(Cache, Key, Val).
+
+set(Cache, Key, Val, TTL) ->
+   cache:put(Cache, Key, Val, TTL).
+
+%%
+%% asynchronous store key/val
+-spec(set_/3 :: (cache(), key(), entity()) -> ok).
+-spec(set_/4 :: (cache(), key(), entity(), ttl()) -> ok).
+
+set_(Cache, Key, Val) ->
+   cache:put_(Cache, Key, Val).
+
+set_(Cache, Key, Val, TTL) ->
+   cache:put_(Cache, Key, Val, TTL).
+
+
+%%
+%% synchronous store key/val only if cache does not already hold data for this key
+-spec(add/3  :: (cache(), key(), entity()) -> ok | conflict).
+-spec(add/4  :: (cache(), key(), entity(), ttl()) -> ok | conflict).
+
+add(Cache, Key, Val) ->
+   gen_server:call(Cache, {add, Key, Val}, ?DEF_CACHE_TIMEOUT).
+
+add(Cache, Key, Val, TTL) ->
+   gen_server:call(Cache, {add, Key, Val, TTL}, ?DEF_CACHE_TIMEOUT).
+
+%%
+%% asynchronous store key/val only if cache does not already hold data for this key
+-spec(add_/3  :: (cache(), key(), entity()) -> ok).
+-spec(add_/4  :: (cache(), key(), entity(), ttl()) -> ok).
+
+add_(Cache, Key, Val) ->
+   gen_server:cast(Cache, {add, Key, Val}).
+
+add_(Cache, Key, Val, TTL) ->
+   gen_server:cast(Cache, {add, Key, Val, TTL}).
+
+
+%%
+%% synchronous store key/val only if cache does hold data for this key
+-spec(replace/3  :: (cache(), key(), entity()) -> ok | not_found).
+-spec(replace/4  :: (cache(), key(), entity(), ttl()) -> ok | not_found).
+
+replace(Cache, Key, Val) ->
+   gen_server:call(Cache, {replace, Key, Val}, ?DEF_CACHE_TIMEOUT).
+
+replace(Cache, Key, Val, TTL) ->
+   gen_server:call(Cache, {replace, Key, Val, TTL}, ?DEF_CACHE_TIMEOUT).
+
+
+%%
+%% asynchronous store key/val only if cache does hold data for this key
+-spec(replace_/3  :: (cache(), key(), entity()) -> ok).
+-spec(replace_/4  :: (cache(), key(), entity(), ttl()) -> ok).
+
+replace_(Cache, Key, Val) ->
+   gen_server:cast(Cache, {replace, Key, Val}).
+
+replace_(Cache, Key, Val, TTL) ->
+   gen_server:cast(Cache, {replace, Key, Val, TTL}).
+
+
+%%
+%% synchronously add data to existing key after existing data, the operation do not prolong entry ttl
+-spec(append/3  :: (cache(), key(), entity()) -> ok | not_found).
+
+append(Cache, Key, Val) ->
+   gen_server:call(Cache, {append, Key, Val}, ?DEF_CACHE_TIMEOUT).
+
+%%
+%% synchronously add data to existing key after existing data, the operation do not prolong entry ttl
+-spec(append_/3  :: (cache(), key(), entity()) -> ok).
+
+append_(Cache, Key, Val) ->
+   gen_server:cast(Cache, {append, Key, Val}).
+
+
+%%
+%% synchronously add data to existing key before existing data
+-spec(prepend/3  :: (cache(), key(), entity()) -> ok | not_found).
+
+prepend(Cache, Key, Val) ->
+   gen_server:call(Cache, {prepend, Key, Val}, ?DEF_CACHE_TIMEOUT).
+
+%%
+%% asynchronously add data to existing key before existing data
+-spec(prepend_/3  :: (cache(), key(), entity()) -> ok).
+
+prepend_(Cache, Key, Val) ->
+   gen_server:cast(Cache, {prepend, Key, Val}).
+
+
+%%
+%% synchronous remove entry from cache
+-spec(delete/2  :: (cache(), key()) -> ok).
+
+delete(Cache, Key) ->
+   cache:remove(Cache, Key).
+
+%%
+%% asynchronous remove entry from cache
+-spec(delete_/2 :: (cache(), key()) -> ok).
+
+delete_(Cache, Key) ->
+   cache:remove_(Cache, Key).
 
