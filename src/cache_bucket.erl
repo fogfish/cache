@@ -76,7 +76,7 @@ init([{policy, X} | T], #cache{}=S) ->
    init(T, S#cache{policy=X});
 
 init([{memory, X} | Opts], S) ->
-   init(Opts, S#cache{memory=X div erlang:sysinfo(wordsize)});
+   init(Opts, S#cache{memory=X div erlang:system_info(wordsize)});
 
 init([{size,   X} | Opts],  S) ->
    init(Opts, S#cache{cardinality=X});
