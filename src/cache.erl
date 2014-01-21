@@ -34,6 +34,7 @@
 -export([
    start_link/2,
    drop/1,
+   purge/1,
    i/1,
    i/2,
    heap/2,
@@ -47,6 +48,10 @@
    ttl/2,
    remove/2, 
    remove_/2,
+   inc/3,
+   inc_/3,
+   dec/3,
+   dec_/3,
    % memecached like interface
    set/3,
    set/4,
@@ -85,6 +90,7 @@
 %%    {ttl,    integer()} - default time-to-live in seconds
 %%    {quota,  integer()} - frequency of quota check in seconds
 %%    {stats,  function() | {Mod, Fun}} - cache statistic aggregate functor 
+%%    {heir,   atom() | pid()} - heir of evicted cache segments
 -spec(start_link/2 :: (name(), list()) -> {ok, pid()} | {error, any()}).
 
 start_link(Cache, Opts) ->
@@ -105,7 +111,25 @@ drop(Cache)
    drop(whereis(Cache));
 drop(Cache)
  when is_pid(Cache) ->
-   erlang:exit(Cache, shutdown).
+   gen_server:call(Cache, drop).
+
+%%
+%% purge cache
+-spec(purge/1 :: (cache()) -> ok).
+
+purge(undefined) ->
+   ok;
+purge({global, Cache}) ->
+   purge(global:whereis_name(Cache));
+purge({Cache, Node}) ->
+   purge(rpc:call(Node, cache, purge, [Cache]));
+purge(Cache)
+ when is_atom(Cache) ->
+   purge(whereis(Cache));
+purge(Cache)
+ when is_pid(Cache) ->
+   gen_server:call(Cache, purge).
+
 
 %%
 %% return cache meta data
@@ -193,6 +217,28 @@ remove(Cache, Key) ->
 
 remove_(Cache, Key) ->
    gen_server:cast(Cache, {remove, Key}).
+
+%%
+%% synchronous cache inc/dec
+-spec(inc/3  :: (cache(), key(), integer() | {integer(), integer()}) -> integer() | undefined).
+-spec(dec/3  :: (cache(), key(), integer() | {integer(), integer()}) -> integer() | undefined).
+
+inc(Cache, Key, Val) ->
+   gen_server:call(Cache, {inc, Key, Val}, ?DEF_CACHE_TIMEOUT).
+
+dec(Cache, Key, Val) ->
+   gen_server:call(Cache, {dec, Key, Val}, ?DEF_CACHE_TIMEOUT).
+
+%%
+%% asynchronous cache inc/dec
+-spec(inc_/3 :: (cache(), key(), integer() | {integer(), integer()}) -> ok).
+-spec(dec_/3 :: (cache(), key(), integer() | {integer(), integer()}) -> ok).
+
+inc_(Cache, Key, Val) ->
+   gen_server:cast(Cache, {inc, Key, Val}).
+
+dec_(Cache, Key, Val) ->
+   gen_server:cast(Cache, {dec, Key, Val}).
 
 
 %%%----------------------------------------------------------------------------   

@@ -44,9 +44,10 @@
    memory      = undefined :: integer(),  %% cache memory limit
 
    quota  = ?DEF_CACHE_QUOTA  :: integer(),  %% quota enforcement timer
-   evict  = undefined,                       %% evict timer
+   evict  = undefined                        %% evict timer
 
-   stats  = undefined   :: any()       %% stats aggregation functor 
+  ,stats  = undefined   :: any()       %% stats aggregation functor 
+  ,heir   = undefined   :: pid()       %% the heir of evicted cache segment
 }).
 
 %% cache segment
@@ -93,6 +94,9 @@ init([{quota, X} | Opts], S) ->
 init([{stats, X} | Opts], S) ->
    init(Opts, S#cache{stats=X});
 
+init([{heir,  X} | Opts], S) ->
+   init(Opts, S#cache{heir=X});
+
 init([_ | Opts], S) ->
    init(Opts, S);
 
@@ -108,8 +112,13 @@ init([], S) ->
 
 %%
 %%     
-terminate(_Reason, _S) ->
-   ok.
+terminate(_Reason, S) ->
+   lists:foreach(
+      fun(X) ->
+         destroy_heap(X#heap.id, S#cache.heir)
+      end,
+      S#cache.heap
+   ).
 
 %%%----------------------------------------------------------------------------   
 %%%
@@ -137,6 +146,14 @@ handle_call({ttl, Key}, _, S) ->
 
 handle_call({remove, Key}, _, S) ->
    {reply, ok, cache_remove(Key, S)};
+
+handle_call({inc, Key, Val}, _, S) ->
+   {Reply, NS} = cache_inc(Key, Val, S),
+   {reply, Reply, NS};
+
+handle_call({dec, Key, Val}, _, S) ->
+   {Reply, NS} = cache_dec(Key, Val, S),
+   {reply, Reply, NS};
 
 handle_call({add, Key, Val}, _, S) ->
    case cache_has(Key, S) of
@@ -207,6 +224,18 @@ handle_call({heap, N}, _, S) ->
       {reply, badarg,    S}
    end;
 
+handle_call(drop, _, S) ->
+   {stop, normal, ok, S};
+
+handle_call(purge, _, S) ->
+   lists:foreach(
+      fun(X) ->
+         destroy_heap(X#heap.id, S#cache.heir)
+      end,
+      S#cache.heap
+   ),
+   {reply, ok, init_heap(S#cache{heap = []})};
+
 handle_call(_, _, S) ->
    {noreply, S}.
 
@@ -220,6 +249,15 @@ handle_cast({put, Key, Val, TTL}, S) ->
 
 handle_cast({remove, Key}, S) ->
    {noreply, cache_remove(Key, S)};
+
+handle_cast({inc, Key, Val}, S) ->
+   {_, NS} = cache_inc(Key, Val, S),
+   {noreply, NS};
+
+handle_cast({dec, Key, Val}, S) ->
+   {_, NS} = cache_dec(Key, Val, S),
+   {noreply, NS};
+
 
 handle_cast({add, Key, Val}, S) ->
    case cache_has(Key, S) of
@@ -438,6 +476,50 @@ cache_remove(Key, #cache{}=S) ->
    S.
 
 %%
+%% @todo: reduce one write
+cache_inc(Key, {Pos, Val}, S) ->
+   case cache_get(Key, S) of
+      X when is_tuple(X) ->
+         Old = erlang:element(Pos, X),
+         {Old, cache_put(Key, erlang:setelement(Pos, X, Old + Val), S)};
+      _  ->
+         {undefined, S}
+   end;
+
+cache_inc(Key, Val, S) ->
+   case cache_get(Key, S) of
+      undefined ->
+         {undefined, cache_put(Key, Val, S)};
+      X when is_integer(X) ->
+         {X, cache_put(Key, X + Val, S)};
+      _  ->
+         {undefined, S}
+   end.
+
+%%
+%%
+cache_dec(Key, {Pos, Val}, S) ->
+   case cache_get(Key, S) of
+      X when is_tuple(X) ->
+         Old = erlang:element(Pos, X),
+         {Old, cache_put(Key, erlang:setelement(Pos, X, Old - Val), S)};
+      _  ->
+         {undefined, S}
+   end;
+
+cache_dec(Key, Val, S) ->
+   case cache_get(Key, S) of
+      undefined ->
+         {undefined, cache_put(Key, - Val, S)};
+      X when is_integer(X) ->
+         {X, cache_put(Key, X - Val, S)};
+      _  ->
+         {undefined, S}
+   end.
+
+
+
+%%
 %%
 heap_lookup(Key, [H | Tail]) ->
    case ets:lookup(H#heap.id, Key) of
@@ -480,8 +562,8 @@ init_heap(#cache{}=S) ->
 free_heap(#cache{}=S) ->
    [H | Tail] = lists:reverse(S#cache.heap),
    Size = ets:info(H#heap.id, size),
-   ets:delete(H#heap.id),
    cache_util:stats(S#cache.stats, {cache, S#cache.name, evicted}, Size),
+   destroy_heap(H#heap.id, S#cache.heir),
    ?DEBUG("cache ~p: free heap ~p~n", [S#cache.name, H#heap.id]),
    init_heap(
       S#cache{
@@ -489,6 +571,21 @@ free_heap(#cache{}=S) ->
       }
    ).
    
+destroy_heap(Id, undefined) ->
+   ets:delete(Id);
+destroy_heap(Id, Heir)
+ when is_pid(Heir) ->
+   ets:give_away(Id, Heir, evicted);
+destroy_heap(Id, Heir)
+ when is_atom(Heir) ->
+   case erlang:whereis(Heir) of
+      undefined ->
+         ets:delete(Id);
+      Pid       ->
+         ets:give_away(Id, Pid, evicted)
+   end.
+
+
 %%
 %% heap policy check
 is_heap_out_of_quota(#heap{}=H) ->
