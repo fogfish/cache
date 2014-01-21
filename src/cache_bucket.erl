@@ -147,12 +147,8 @@ handle_call({ttl, Key}, _, S) ->
 handle_call({remove, Key}, _, S) ->
    {reply, ok, cache_remove(Key, S)};
 
-handle_call({inc, Key, Val}, _, S) ->
-   {Reply, NS} = cache_inc(Key, Val, S),
-   {reply, Reply, NS};
-
-handle_call({dec, Key, Val}, _, S) ->
-   {Reply, NS} = cache_dec(Key, Val, S),
+handle_call({acc, Key, Val}, _, S) ->
+   {Reply, NS} = cache_acc(Key, Val, S),
    {reply, Reply, NS};
 
 handle_call({add, Key, Val}, _, S) ->
@@ -250,14 +246,9 @@ handle_cast({put, Key, Val, TTL}, S) ->
 handle_cast({remove, Key}, S) ->
    {noreply, cache_remove(Key, S)};
 
-handle_cast({inc, Key, Val}, S) ->
-   {_, NS} = cache_inc(Key, Val, S),
+handle_cast({acc, Key, Val}, S) ->
+   {_, NS} = cache_acc(Key, Val, S),
    {noreply, NS};
-
-handle_cast({dec, Key, Val}, S) ->
-   {_, NS} = cache_dec(Key, Val, S),
-   {noreply, NS};
-
 
 handle_cast({add, Key, Val}, S) ->
    case cache_has(Key, S) of
@@ -477,47 +468,36 @@ cache_remove(Key, #cache{}=S) ->
 
 %%
 %% @todo: reduce one write
-cache_inc(Key, {Pos, Val}, S) ->
-   case cache_get(Key, S) of
-      X when is_tuple(X) ->
-         Old = erlang:element(Pos, X),
-         {Old, cache_put(Key, erlang:setelement(Pos, X, Old + Val), S)};
-      _  ->
-         {badarg, S}
-   end;
-
-cache_inc(Key, Val, S) ->
+cache_acc(Key, Val, S)
+ when is_integer(Val) ->
    case cache_get(Key, S) of
       undefined ->
          {undefined, cache_put(Key, Val, S)};
       X when is_integer(X) ->
          {X, cache_put(Key, X + Val, S)};
-      _  ->
-         {badarg, S}
-   end.
-
-%%
-%%
-cache_dec(Key, {Pos, Val}, S) ->
-   case cache_get(Key, S) of
       X when is_tuple(X) ->
-         Old = erlang:element(Pos, X),
-         {Old, cache_put(Key, erlang:setelement(Pos, X, Old - Val), S)};
+         {erlang:element(1, X), cache_put(Key, tuple_acc({1, Val}, X), S)};
       _  ->
          {badarg, S}
    end;
-
-cache_dec(Key, Val, S) ->
+cache_acc(Key, Val, S) ->
    case cache_get(Key, S) of
-      undefined ->
-         {undefined, cache_put(Key, - Val, S)};
-      X when is_integer(X) ->
-         {X, cache_put(Key, X - Val, S)};
+      X when is_tuple(X) ->
+         {X, cache_put(Key, tuple_acc(Val, X), S)};
       _  ->
          {badarg, S}
    end.
 
-
+tuple_acc({Pos, Val}, X) ->
+   erlang:setelement(Pos, X, erlang:element(Pos, X) + Val);
+tuple_acc(List, X) ->
+   lists:foldl(
+      fun({Pos, Val}, Acc) ->
+         erlang:setelement(Pos, Acc, erlang:element(Pos, Acc) + Val)
+      end,
+      X,
+      List 
+   ).
 
 %%
 %%

@@ -48,10 +48,8 @@
    ttl/2,
    remove/2, 
    remove_/2,
-   inc/3,
-   inc_/3,
-   dec/3,
-   dec_/3,
+   acc/3,
+   acc_/3,
    % memecached like interface
    set/3,
    set/4,
@@ -219,26 +217,18 @@ remove_(Cache, Key) ->
    gen_server:cast(Cache, {remove, Key}).
 
 %%
-%% synchronous cache inc/dec
--spec(inc/3  :: (cache(), key(), integer() | {integer(), integer()}) -> integer() | undefined).
--spec(dec/3  :: (cache(), key(), integer() | {integer(), integer()}) -> integer() | undefined).
+%% synchronous in-cache accumulator 
+-spec(acc/3  :: (cache(), key(), integer() | [{integer(), integer()}]) -> integer() | undefined).
 
-inc(Cache, Key, Val) ->
-   gen_server:call(Cache, {inc, Key, Val}, ?DEF_CACHE_TIMEOUT).
-
-dec(Cache, Key, Val) ->
-   gen_server:call(Cache, {dec, Key, Val}, ?DEF_CACHE_TIMEOUT).
+acc(Cache, Key, Val) ->
+   gen_server:call(Cache, {acc, Key, Val}, ?DEF_CACHE_TIMEOUT).
 
 %%
-%% asynchronous cache inc/dec
--spec(inc_/3 :: (cache(), key(), integer() | {integer(), integer()}) -> ok).
--spec(dec_/3 :: (cache(), key(), integer() | {integer(), integer()}) -> ok).
+%% asynchronous in-cache accumulator
+-spec(acc_/3 :: (cache(), key(), integer() | {integer(), integer()}) -> ok).
 
-inc_(Cache, Key, Val) ->
-   gen_server:cast(Cache, {inc, Key, Val}).
-
-dec_(Cache, Key, Val) ->
-   gen_server:cast(Cache, {dec, Key, Val}).
+acc_(Cache, Key, Val) ->
+   gen_server:cast(Cache, {acc, Key, Val}).
 
 
 %%%----------------------------------------------------------------------------   

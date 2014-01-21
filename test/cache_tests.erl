@@ -18,6 +18,7 @@ lru_test_() ->
         ,{"has",         fun cache_has/0}
         ,{"get",         fun cache_get/0}
         ,{"del",         fun cache_del/0}
+        ,{"acc",         fun cache_acc/0}
         ,{"lifecycle 1", {timeout, 10000, fun cache_lc1/0}}
       ]
    }.
@@ -43,6 +44,16 @@ cache_get() ->
 cache_del() ->
    ok = cache:remove(test, <<"key">>),
    ok = cache:remove(test, <<"yek">>).
+
+cache_acc() ->
+   undefined = cache:acc(test, <<"acc">>, 10),
+   10 = cache:acc(test, <<"acc">>, 10),
+   20 = cache:get(test, <<"acc">>),
+   badarg = cache:acc(test, <<"acc">>, [{1, 10}]),
+   badarg = cache:acc(test, <<"acc1">>,[{1, 10}]),
+   ok = cache:put(test, <<"acc1">>, {10,20,30,40}),
+   {10, 20, 30, 40} = cache:acc(test, <<"acc1">>,[{1, 10}, {2, 10}]),
+   {20, 30, 30, 40} = cache:get(test, <<"acc1">>).
 
 cache_lc1() ->
    error_logger:error_msg("~n~n life-cycle #1"),
