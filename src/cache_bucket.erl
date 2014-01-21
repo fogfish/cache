@@ -483,7 +483,7 @@ cache_inc(Key, {Pos, Val}, S) ->
          Old = erlang:element(Pos, X),
          {Old, cache_put(Key, erlang:setelement(Pos, X, Old + Val), S)};
       _  ->
-         {undefined, S}
+         {badarg, S}
    end;
 
 cache_inc(Key, Val, S) ->
@@ -493,7 +493,7 @@ cache_inc(Key, Val, S) ->
       X when is_integer(X) ->
          {X, cache_put(Key, X + Val, S)};
       _  ->
-         {undefined, S}
+         {badarg, S}
    end.
 
 %%
@@ -504,7 +504,7 @@ cache_dec(Key, {Pos, Val}, S) ->
          Old = erlang:element(Pos, X),
          {Old, cache_put(Key, erlang:setelement(Pos, X, Old - Val), S)};
       _  ->
-         {undefined, S}
+         {badarg, S}
    end;
 
 cache_dec(Key, Val, S) ->
@@ -514,7 +514,7 @@ cache_dec(Key, Val, S) ->
       X when is_integer(X) ->
          {X, cache_put(Key, X - Val, S)};
       _  ->
-         {undefined, S}
+         {badarg, S}
    end.
 
 
