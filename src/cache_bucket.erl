@@ -105,8 +105,8 @@ init([], S) ->
    Evict = cache_util:mdiv(S#cache.ttl, S#cache.n),
    init_heap(
       S#cache{
-         evict = cache_util:timeout(Evict * 1000,         evict),
-         quota = cache_util:timeout(S#cache.quota * 1000, quota)
+         evict  = cache_util:timeout(Evict * 1000,         evict),
+         quota  = cache_util:timeout(S#cache.quota * 1000, quota)
       }
    ).
 
