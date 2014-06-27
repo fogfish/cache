@@ -46,12 +46,7 @@ rebar:
 	chmod ugo+x rebar
 
 benchmark:
-	$(BB)/basho_bench -N bb@127.0.0.0 -C nocookie -J ${id}@127.0.0.1 priv/${id}.benchmark
+	$(BB)/basho_bench -N bb@127.0.0.0 -C nocookie priv/${id}.benchmark
 	$(BB)/priv/summary.r -i tests/current
 	open tests/current/summary.png
-
-# benchmark:
-# 	$(BB)/basho_bench -N bb@127.0.0.0 -C nocookie -J ${id}@127.0.0.1 priv/${id}.benchmark
-# 	$(BB)/priv/summary.r -i tests/current
-# 	open tests/current/summary.png
 

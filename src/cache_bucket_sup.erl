@@ -15,7 +15,7 @@
 %%
 %%  @description
 %%    root cache supervisor
--module(cache_sup).
+-module(cache_bucket_sup).
 -behaviour(supervisor).
 -author('Dmitry Kolesnikov <dmkolesnikov@gmail.com>').
 -author('Jose Luis Navarro <jlnavarro@gmail.com>').
@@ -46,9 +46,11 @@ init([]) ->
     {ok,
       {
          {one_for_one, 4, 1800},
-         [
-            ?CHILD(supervisor, cache_bucket_sup)
-         ]
+         [?CHILD(worker, Name, cache, [Name, Opts]) || {Name, Opts} <- default_cache()]
       }
    }.
 
+%%
+%% list of default cache specification
+default_cache() ->
+   proplists:delete(included_applications, application:get_all_env()).

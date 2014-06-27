@@ -18,6 +18,8 @@
 -module(cache_benchmark).
 -author('Dmitry Kolesnikov <dmkolesnikov@gmail.com>').
 
+-include_lib("stdlib/include/ms_transform.hrl").
+
 -export([new/1, run/4]).
 
 %%
@@ -43,7 +45,7 @@ run(put, KeyGen, ValGen, Cache) ->
       E  -> {error, failure(p, Key, E), Cache}
    end;
 
-run(get, KeyGen, _ValueGen, Cache) ->
+run(get, KeyGen, _ValGen, Cache) ->
    Key = KeyGen(),
    case (catch cache:get(Cache, Key)) of
       Val when is_binary(Val)  -> {ok, Cache};
@@ -51,17 +53,28 @@ run(get, KeyGen, _ValueGen, Cache) ->
       E -> {error, failure(g, Key, E), Cache}
    end;
 
-run(remove, KeyGen, _ValueGen, Cache) ->
+run(remove, KeyGen, _ValGen, Cache) ->
    Key = KeyGen(),
    case (catch cache:remove(cache, Key)) of
       ok -> {ok, Cache};
       E  -> {error, failure(r, Key, E), Cache}
-   end.
+   end;
+
+run(select, KeyGen, _ValGen, Cache) ->
+   Key0 = KeyGen(),
+   Key1 = KeyGen(),
+   cache:fold(
+      fun(_, Acc) -> Acc + 1 end,
+      0,
+      ets:fun2ms(fun({Key, Val}) when Key > Key0, Key < Key1 -> Key end),
+      cache
+   ),
+   {ok, Cache}.   
 
 
 %% 
 local_init() ->
-   case application:start(cache) of
+   case cache:start() of
       {error, {already_started, _}} ->
          cache;
       ok ->

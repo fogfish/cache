@@ -14,6 +14,11 @@
 %%   limitations under the License.
 %%
 
+%%
+%% define default select limit
+-define(CONFIG_SELECT,   1000).
+
+
 %-define(VERBOSE, true).
 -ifdef(VERBOSE).
    -define(DEBUG(Str, Args), error_logger:error_msg(Str, Args)).
