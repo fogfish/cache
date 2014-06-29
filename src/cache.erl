@@ -51,7 +51,7 @@
    remove_/2,
    acc/3,
    acc_/3,
-   select/2,
+   match/2,
    fold/4,
    % memecached like interface
    set/3,
@@ -241,54 +241,50 @@ acc_(Cache, Key, Val) ->
 
 %%
 %% query cache segments using match specification
-%% e.g.
-%%  -include_lib("stdlib/include/ms_transform.hrl").
-%%  cache:select(cache, ets:fun2ms(fun(X) -> X end)).
--spec(select/2 :: (cache(), function() | any()) -> {[any()], any()}).
+-spec(match/2 :: (cache(), any()) -> {[any()], any()}).
 
-select(Cache, {q, [Head|Tail], Req}) ->
+match(Cache, {q, [Head|Tail], Req}) ->
    %% compiled query
    try
-      case ets:select(Head, Req, ?CONFIG_SELECT) of
+      case ets:match_object(Head, Req, ?CONFIG_SELECT) of
          '$end_of_table' ->
-            select(Cache, {q, Tail, Req});
+            match(Cache, {q, Tail, Req});
          {Result, Query} ->
             {Result, {q, Tail, Req, Query}}
       end
    catch _:badarg ->
       %% cache segment was evicted
-      select(Cache, {q, Tail, Req})
+      match(Cache, {q, Tail, Req})
    end;
 
-select(_Cache, {q, [], _}=Req) ->
+match(_Cache, {q, [], _}=Req) ->
    {eof, Req};
 
-select(Cache, {q, Heap, Req, '$end_of_table'}) ->
-   select(Cache, {q, Heap, Req});
+match(Cache, {q, Heap, Req, '$end_of_table'}) ->
+   match(Cache, {q, Heap, Req});
 
-select(Cache, {q, Heap, Req, Query0}) ->
+match(Cache, {q, Heap, Req, Query0}) ->
    try
-      case ets:select(Query0) of
+      case ets:match_object(Query0) of
          '$end_of_table' ->
-            select(Cache, {q, Heap, Req});
+            match(Cache, {q, Heap, Req});
          {Result, Query} ->
             {Result, {q, Heap, Req, Query}}
       end
    catch _:badarg ->
       %% cache segment was evicted
-      select(Cache, {q, Heap, Req})
+      match(Cache, {q, Heap, Req})
    end;
 
-select(Cache, Req) ->
-   select(Cache, {q, lists:reverse(i(Cache, heap)), Req}).
-
+match(Cache, Req) ->
+   match(Cache, {q, lists:reverse(i(Cache, heap)), Req}).
 
 %%
 %% query cache segments and fold function
 -spec(fold/4 :: (function(), any(), function(), cache()) -> any()).
 
 fold(Fun, Acc, Req, Cache) ->
-   case select(Cache, Req) of
+   case match(Cache, Req) of
       {eof, _} ->
          Acc;
       {List, Query} ->
