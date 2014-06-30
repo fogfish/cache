@@ -30,6 +30,7 @@
 -define(DEF_CACHE_POLICY, lru).
 
 %% default cache ttl and number of generations
+-define(DEF_CACHE_TYPE,  set).
 -define(DEF_CACHE_TTL,   600).
 -define(DEF_CACHE_N,      10).
 

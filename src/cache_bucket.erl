@@ -36,7 +36,8 @@
    name   = undefined  :: atom(),     %% name of cache bucket
    heap   = []         :: list(),     %% cache heap segments
 
-   n      = ?DEF_CACHE_N      :: integer(),  %% number of segments          
+   n      = ?DEF_CACHE_N      :: integer(),  %% number of segments
+   type   = ?DEF_CACHE_TYPE   :: atom(),          
    ttl    = ?DEF_CACHE_TTL    :: integer(),  %% cache time to live
    policy = ?DEF_CACHE_POLICY :: integer(),  %% eviction policy
 
@@ -72,6 +73,9 @@ start_link(Name, Opts) ->
 
 init([Name, Opts]) ->
    {ok, init(Opts, #cache{name=Name})}.
+
+init([{type, X} | T], #cache{}=S) ->
+   init(T, S#cache{type=X});
 
 init([{policy, X} | T], #cache{}=S) ->
    init(T, S#cache{policy=X});
@@ -525,7 +529,7 @@ heap_has(_Key, []) ->
 %%
 %% init cache heap
 init_heap(#cache{}=S) ->
-   Id = ets:new(undefined, [set, protected]),
+   Id = ets:new(undefined, [S#cache.type, protected]),
    ?DEBUG("cache ~p: init heap ~p~n", [S#cache.name, Id]),
    Heap = #heap{
       id          = Id,

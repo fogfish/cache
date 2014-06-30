@@ -90,6 +90,7 @@ start() ->
 
 %%
 %% start new cache bucket, accepted options:
+%%    {type,   set | ordered_set} - cache segment type (default set)
 %%    {policy, lru | mru} - cache eviction policy
 %%    {memory, integer()} - cache memory quota in bytes
 %%    {size,   integer()} - cache cardinality quota
