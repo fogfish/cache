@@ -246,7 +246,7 @@ acc_(Cache, Key, Val) ->
 match(Cache, {q, [Head|Tail], Req}) ->
    %% compiled query
    try
-      case ets:match_object(Head, Req, ?CONFIG_SELECT) of
+      case cache_match(Cache, Head, Req, ?CONFIG_SELECT) of
          '$end_of_table' ->
             match(Cache, {q, Tail, Req});
          {Result, Query} ->
@@ -265,7 +265,7 @@ match(Cache, {q, Heap, Req, '$end_of_table'}) ->
 
 match(Cache, {q, Heap, Req, Query0}) ->
    try
-      case ets:match_object(Query0) of
+      case cache_match(Cache, Query0) of
          '$end_of_table' ->
             match(Cache, {q, Heap, Req});
          {Result, Query} ->
@@ -278,6 +278,18 @@ match(Cache, {q, Heap, Req, Query0}) ->
 
 match(Cache, Req) ->
    match(Cache, {q, lists:reverse(i(Cache, heap)), Req}).
+
+cache_match({_, Node}, Heap, Req, Limit) ->
+   rpc:call(Node, ets, match_object, [Heap, Req, ?CONFIG_SELECT], 60000);
+
+cache_match(_, Heap, Req, Limit) ->
+   ets:match_object(Heap, Req, Limit).
+
+cache_match({_, Node}, Req) ->
+   rpc:call(Node, ets, match_object, [Req]);   
+
+cache_match(_, Req) ->
+   ets:match_object(Req).
 
 %%
 %% query cache segments and fold function
