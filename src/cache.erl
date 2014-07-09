@@ -51,8 +51,6 @@
    remove_/2,
    acc/3,
    acc_/3,
-   match/2,
-   fold/4,
    % memecached like interface
    set/3,
    set/4,
@@ -239,70 +237,6 @@ acc(Cache, Key, Val) ->
 
 acc_(Cache, Key, Val) ->
    gen_server:cast(Cache, {acc, Key, Val}).
-
-%%
-%% query cache segments using match specification
--spec(match/2 :: (cache(), any()) -> {[any()], any()}).
-
-match(Cache, {q, [Head|Tail], Req}) ->
-   %% compiled query
-   try
-      case cache_match(Cache, Head, Req, ?CONFIG_SELECT) of
-         '$end_of_table' ->
-            match(Cache, {q, Tail, Req});
-         {Result, Query} ->
-            {Result, {q, Tail, Req, Query}}
-      end
-   catch _:badarg ->
-      %% cache segment was evicted
-      match(Cache, {q, Tail, Req})
-   end;
-
-match(_Cache, {q, [], _}=Req) ->
-   {eof, Req};
-
-match(Cache, {q, Heap, Req, '$end_of_table'}) ->
-   match(Cache, {q, Heap, Req});
-
-match(Cache, {q, Heap, Req, Query0}) ->
-   try
-      case cache_match(Cache, Query0) of
-         '$end_of_table' ->
-            match(Cache, {q, Heap, Req});
-         {Result, Query} ->
-            {Result, {q, Heap, Req, Query}}
-      end
-   catch _:badarg ->
-      %% cache segment was evicted
-      match(Cache, {q, Heap, Req})
-   end;
-
-match(Cache, Req) ->
-   match(Cache, {q, lists:reverse(i(Cache, heap)), Req}).
-
-cache_match({_, Node}, Heap, Req, Limit) ->
-   rpc:call(Node, ets, match_object, [Heap, Req, ?CONFIG_SELECT], 60000);
-
-cache_match(_, Heap, Req, Limit) ->
-   ets:match_object(Heap, Req, Limit).
-
-cache_match({_, Node}, Req) ->
-   rpc:call(Node, ets, match_object, [Req]);   
-
-cache_match(_, Req) ->
-   ets:match_object(Req).
-
-%%
-%% query cache segments and fold function
--spec(fold/4 :: (function(), any(), function(), cache()) -> any()).
-
-fold(Fun, Acc, Req, Cache) ->
-   case match(Cache, Req) of
-      {eof, _} ->
-         Acc;
-      {List, Query} ->
-         fold(Fun, lists:foldl(Fun, Acc, List), Query, Cache)
-   end.
 
 %%%----------------------------------------------------------------------------   
 %%%

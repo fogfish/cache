@@ -58,19 +58,7 @@ run(remove, KeyGen, _ValGen, Cache) ->
    case (catch cache:remove(cache, Key)) of
       ok -> {ok, Cache};
       E  -> {error, failure(r, Key, E), Cache}
-   end;
-
-run(select, KeyGen, _ValGen, Cache) ->
-   Key0 = KeyGen(),
-   Key1 = KeyGen(),
-   cache:fold(
-      fun(_, Acc) -> Acc + 1 end,
-      0,
-      ets:fun2ms(fun({Key, Val}) when Key > Key0, Key < Key1 -> Key end),
-      cache
-   ),
-   {ok, Cache}.   
-
+   end.
 
 %% 
 local_init() ->

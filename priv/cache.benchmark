@@ -14,7 +14,6 @@
 {operations, [
    {put,    5} 
   ,{get,    5}
-  % ,{select, 1}
 ]}.
 
 %{cache, {mycache, 'cache@127.0.0.1'}}.
