@@ -22,6 +22,7 @@
 -include("cache.hrl").
 
 -export([
+   start_link/1,
    start_link/2,
    init/1, 
    terminate/2,
@@ -64,6 +65,9 @@
 %%% Factory
 %%%
 %%%----------------------------------------------------------------------------   
+
+start_link(Opts) ->
+   gen_server:start_link(?MODULE, [undefined, Opts], []).
 
 start_link({global, Name}, Opts) ->
    gen_server:start_link({global, Name}, ?MODULE, [Name, Opts], []);

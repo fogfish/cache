@@ -33,6 +33,7 @@
 
 -export([start/0]).
 -export([
+   start_link/1,
    start_link/2,
    drop/1,
    purge/1,
@@ -97,7 +98,11 @@ start() ->
 %%    {quota,  integer()} - frequency of quota check in seconds
 %%    {stats,  function() | {Mod, Fun}} - cache statistic aggregate functor 
 %%    {heir,   atom() | pid()} - heir of evicted cache segments
+-spec(start_link/1 :: (list()) -> {ok, pid()} | {error, any()}).
 -spec(start_link/2 :: (name(), list()) -> {ok, pid()} | {error, any()}).
+
+start_link(Opts) ->
+   cache_bucket:start_link(Opts).
 
 start_link(Cache, Opts) ->
    cache_bucket:start_link(Cache, Opts).
