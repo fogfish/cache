@@ -4,9 +4,7 @@ Cache uses N disposable ETS tables instead of single one. The cache applies evic
 policies at segment level. The oldest ETS table is destroyed and new one is created when 
 quota or TTL criteria are exceeded.   
 
-The write operation always uses youngest segment. The read operation lookup key from youngest to oldest table
-until it is found same time key is moved to youngest segment to prolong TTL. If none of ETS table contains key
-then cache-miss occurs. 
+The write operation always uses youngest segment. The read operation lookup key from youngest to oldest table until it is found same time key is moved to youngest segment to prolong TTL. If none of ETS table contains key then cache-miss occurs. 
 
 The downside is inability to assign precise TTL per single cache entry. TTL is always approximated to nearest segment. (e.g. cache with 60 sec TTL and 10 segments has 6 sec accuracy on TTL) 
 
@@ -68,9 +66,7 @@ The local cache instance is accessible for any Erlang nodes in the cluster.
 
    MacBook Pro, Intel Core i5, 2.5GHz, 8GB 1600 MHz DDR3, 256 SSD
 
-
    LRU Cache, 10 segments, 20 sec ttl (~2 sec per segment)
-
 
    Local cache (application and cache within same VM)
    ![Local cache (application and cache within same VM)](local.png)
@@ -82,5 +78,3 @@ The local cache instance is accessible for any Erlang nodes in the cluster.
    * Jose Luis Navarro https://github.com/artefactop
    * Valentin Micic
  
-
-

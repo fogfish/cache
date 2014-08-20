@@ -34,30 +34,14 @@
 
 %% internal bucket state
 -record(cache, {
-   name   = undefined  :: atom(),     %% name of cache bucket
-   heap   = []         :: list(),     %% cache heap segments
-
-   n      = ?DEF_CACHE_N      :: integer(),  %% number of segments
-   type   = ?DEF_CACHE_TYPE   :: atom(),          
-   ttl    = ?DEF_CACHE_TTL    :: integer(),  %% cache time to live
-   policy = ?DEF_CACHE_POLICY :: integer(),  %% eviction policy
-
-   cardinality = undefined :: integer(),  %% cache cardinality
-   memory      = undefined :: integer(),  %% cache memory limit
-
-   quota  = ?DEF_CACHE_QUOTA  :: integer(),  %% quota enforcement timer
-   evict  = undefined                        %% evict timer
-
-  ,stats  = undefined   :: any()       %% stats aggregation functor 
-  ,heir   = undefined   :: pid()       %% the heir of evicted cache segment
-}).
-
-%% cache segment
--record(heap, {
-   id           :: integer(),   %% segment heap
-   expire       :: integer(),   %% segment expire time
-   cardinality  :: integer(),   %% segment cardinality quota
-   memory       :: integer()    %% segment memory quota
+   name   = undefined         :: atom()     %% name of cache bucket
+  ,heap   = undefined         :: list()     %% cache heap segments
+  ,n      = ?DEF_CACHE_N      :: integer()  %% number of segments
+  ,policy = ?DEF_CACHE_POLICY :: integer()  %% eviction policy
+  ,check  = ?DEF_CACHE_CHECK  :: integer()  %% status check timeout
+  ,evict  = undefined         :: integer()  %% evict timeout
+  ,stats  = undefined         :: any()      %% stats aggregation functor 
+  ,heir   = undefined         :: pid()      %% the heir of evicted cache segment
 }).
 
 %%%----------------------------------------------------------------------------   
@@ -76,57 +60,42 @@ start_link(Name, Opts) ->
    gen_server:start_link({local, Name},  ?MODULE, [Name, Opts], []).
 
 init([Name, Opts]) ->
-   {ok, init(Opts, #cache{name=Name})}.
+   {ok, init(Opts, Opts, #cache{name=Name})}.
 
-init([{type, X} | T], #cache{}=S) ->
-   init(T, S#cache{type=X});
-
-init([{policy, X} | T], #cache{}=S) ->
-   init(T, S#cache{policy=X});
-
-init([{memory, X} | Opts], S) ->
-   init(Opts, S#cache{memory=X div erlang:system_info(wordsize)});
-
-init([{size,   X} | Opts],  S) ->
-   init(Opts, S#cache{cardinality=X});
-
-init([{n,   X} | Opts], S) ->
-   init(Opts, S#cache{n = X});
-
-init([{ttl, X} | Opts], S) ->
-   init(Opts, S#cache{ttl = X});
-
-init([{quota, X} | Opts], S) ->
-   init(Opts, S#cache{quota=X});
-
-init([{stats, X} | Opts], S) ->
-   init(Opts, S#cache{stats=X});
-
-init([{heir,  X} | Opts], S) ->
-   init(Opts, S#cache{heir=X});
-
-init([_ | Opts], S) ->
-   init(Opts, S);
-
-init([], S) ->
-   random:seed(os:timestamp()),
-   Evict = cache_util:mdiv(S#cache.ttl, S#cache.n),
-   init_heap(
-      S#cache{
-         evict  = cache_util:timeout(Evict * 1000,         evict),
-         quota  = cache_util:timeout(S#cache.quota * 1000, quota)
-      }
-   ).
+init([{policy, X} | Tail], Opts, State) ->
+   init(Tail, Opts, State#cache{policy=X});
+init([{n,      X} | Tail], Opts, State) ->
+   init(Tail, Opts, State#cache{n=X});
+init([{check,  X} | Tail], Opts, State) ->
+   init(Tail, Opts, State#cache{check=X * 1000});
+init([{stats,  X} | Tail], Opts, State) ->
+   init(Tail, Opts, State#cache{stats=X});
+init([{heir,   X} | Tail], Opts, State) ->
+   init(Tail, Opts, State#cache{heir=X});
+init([_ | Tail], Opts, State) ->
+   init(Tail, Opts, State);
+init([], Opts, State) ->
+   Type = proplists:get_value(type,   Opts, ?DEF_CACHE_TYPE),
+   TTL  = proplists:get_value(ttl,    Opts, ?DEF_CACHE_TTL),
+   Size = proplists:get_value(size,   Opts),
+   Mem  = proplists:get_value(memory, Opts),
+   Evict= cache_util:mdiv(TTL,  State#cache.n),
+   Heap = cache_heap:new(
+      Type
+     ,cache_util:mdiv(TTL,  State#cache.n)
+     ,cache_util:mdiv(Size, State#cache.n)
+     ,cache_util:mdiv(cache_util:mdiv(Mem,  State#cache.n), erlang:system_info(wordsize))
+   ),
+   (catch erlang:send_after(State#cache.check, self(), check_heap)),
+   (catch erlang:send_after(Evict, self(), evict_heap)),
+   State#cache{heap=Heap, evict=Evict}.
 
 %%
 %%     
-terminate(_Reason, S) ->
-   lists:foreach(
-      fun(X) ->
-         destroy_heap(X#heap.id, S#cache.heir)
-      end,
-      S#cache.heap
-   ).
+terminate(_Reason, State) ->
+   cache_heap:purge(State#cache.heap, State#cache.heir),
+   ok.
+
 
 %%%----------------------------------------------------------------------------   
 %%%
@@ -213,32 +182,27 @@ handle_call({append, Key, Val}, _, S) ->
          {reply, ok, cache_put(Key, [X, Val], S)}
    end;
 
-handle_call(i, _, S) ->
-   Heap   = [X#heap.id     || X <- S#cache.heap],
-   Expire = [X#heap.expire || X <- S#cache.heap],
-   Size   = [ets:info(X#heap.id, size)   || X <- S#cache.heap],
-   Memory = [ets:info(X#heap.id, memory) || X <- S#cache.heap],
-   {reply, [{heap, Heap}, {expire, Expire}, {size, Size}, {memory, Memory}], S};
+handle_call(i, _, State) ->
+   Heap   = cache_heap:refs(State#cache.heap),
+   Refs   = [X || {_, X} <- Heap],
+   Expire = [X || {X, _} <- Heap],
+   Size   = [ets:info(X, size)   || {_, X} <- Heap],
+   Memory = [ets:info(X, memory) || {_, X} <- Heap],
+   {reply, [{heap, Refs}, {expire, Expire}, {size, Size}, {memory, Memory}], State};
 
-handle_call({heap, N}, _, S) ->
+handle_call({heap, N}, _, State) ->
    try
-      H = lists:nth(N, S#cache.heap),
-      {reply, H#heap.id, S}
+      Ref = lists:nth(N, cache_heap:refs(State#cache.heap)),
+      {reply, Ref, State}
    catch _:_ ->
-      {reply, badarg,    S}
+      {reply, badarg, State}
    end;
 
-handle_call(drop, _, S) ->
-   {stop, normal, ok, S};
+handle_call(drop, _, State) ->
+   {stop, normal, ok, State};
 
-handle_call(purge, _, S) ->
-   lists:foreach(
-      fun(X) ->
-         destroy_heap(X#heap.id, S#cache.heir)
-      end,
-      S#cache.heap
-   ),
-   {reply, ok, init_heap(S#cache{heap = []})};
+handle_call(purge, _, State) ->
+   {reply, ok, State#cache{heap=cache_heap:purge(State#cache.heap, State#cache.heir)}};
 
 handle_call(_, _, S) ->
    {noreply, S}.
@@ -317,47 +281,68 @@ handle_cast(_, S) ->
 
 %%
 %%
-handle_info(evict, S) ->
-   Now = cache_util:now(),
-   case lists:last(S#cache.heap) of
-      H when H#heap.expire =< Now ->
-         {noreply,
-            free_heap(
-               S#cache{evict = cache_util:timeout(S#cache.evict, evict)}
-            )
-         };
+handle_info(check_heap, #cache{n=N, check=Check}=State) ->
+   erlang:send_after(Check, self(), check_heap),
+   Heap = cache_heap:slip(State#cache.heap),
+   case cache_heap:size(Heap) of
+      X when X > N ->
+         {noreply, State#cache{heap=cache_heap:drop(Heap, State#cache.heir)}};
       _ ->
-         {noreply,
-            init_heap(
-               S#cache{evict = cache_util:timeout(S#cache.evict, evict)} 
-            )
-         }
+         {noreply, State#cache{heap=Heap}}
    end;
 
-handle_info(quota, S) ->
-   case is_heap_out_of_quota(hd(S#cache.heap)) of
-      true  ->
-         case length(S#cache.heap) of
-            N when N =:= S#cache.n ->
-               {noreply,
-                  free_heap(
-                     S#cache{quota = cache_util:timeout(S#cache.quota, quota)}
-                  )
-               };
-            _ ->
-               {noreply,
-                  init_heap(
-                     S#cache{quota = cache_util:timeout(S#cache.quota, quota)}
-                  )
-               }
-         end;
-      false ->
-         {noreply,
-            S#cache{
-               quota = cache_util:timeout(S#cache.quota, quota)
-            }
-         }
+handle_info(evict_heap, #cache{n=N, evict=Evict}=State) ->
+   erlang:send_after(Evict, self(), evict_heap),
+   Heap = cache_heap:slip(State#cache.heap),
+   case cache_heap:size(Heap) of
+      X when X > N ->
+         {noreply, State#cache{heap=cache_heap:drop(Heap, State#cache.heir)}};
+      _ ->
+         {noreply, State#cache{heap=Heap}}
    end;
+
+
+% handle_info(evict, S) ->
+%    Now = cache_util:now(),
+%    case lists:last(S#cache.heap) of
+%       H when H#heap.expire =< Now ->
+%          {noreply,
+%             free_heap(
+%                S#cache{evict = cache_util:timeout(S#cache.evict, evict)}
+%             )
+%          };
+%       _ ->
+%          {noreply,
+%             init_heap(
+%                S#cache{evict = cache_util:timeout(S#cache.evict, evict)} 
+%             )
+%          }
+%    end;
+
+% handle_info(quota, S) ->
+%    case is_heap_out_of_quota(hd(S#cache.heap)) of
+%       true  ->
+%          case length(S#cache.heap) of
+%             N when N =:= S#cache.n ->
+%                {noreply,
+%                   free_heap(
+%                      S#cache{quota = cache_util:timeout(S#cache.quota, quota)}
+%                   )
+%                };
+%             _ ->
+%                {noreply,
+%                   init_heap(
+%                      S#cache{quota = cache_util:timeout(S#cache.quota, quota)}
+%                   )
+%                }
+%          end;
+%       false ->
+%          {noreply,
+%             S#cache{
+%                quota = cache_util:timeout(S#cache.quota, quota)
+%             }
+%          }
+%    end;
 
 handle_info(_, S) ->
    {noreply, S}.
@@ -376,31 +361,32 @@ code_change(_Vsn, S, _Extra) ->
 
 %%
 %% insert value to cache
-cache_put(Key, Val, #cache{}=S) ->
-   [Head | Tail] = S#cache.heap,
-   true = ets:insert(Head#heap.id, {Key, Val}),
+cache_put(Key, Val, #cache{heap=Heap}=State) ->
+   {_, Head} = cache_heap:head(Heap),
+   true = ets:insert(Head, {Key, Val}),
    lists:foreach(
-      fun(X) -> ets:delete(X#heap.id, Key) end,
-      Tail
+      fun({_, X}) -> ets:delete(X, Key) end, 
+      cache_heap:tail(Heap)
    ),
-   cache_util:stats(S#cache.stats, {cache, S#cache.name, put}),
-   ?DEBUG("cache ~p: put ~p to heap ~p~n", [S#cache.name, Key, Head#heap.id]),
-   S.
+   cache_util:stats(State#cache.stats, {cache, State#cache.name, put}),
+   ?DEBUG("cache ~p: put ~p to heap ~p~n", [State#cache.name, Key, Head]),
+   State.
 
-cache_put(Key, Val, Expire, #cache{}=S) ->
-   case lists:splitwith(fun(X) -> X#heap.expire > Expire end, S#cache.heap) of
+cache_put(Key, Val, Expire, #cache{}=State) ->
+   Refs = cache_heap:refs(State#cache.heap),
+   case lists:splitwith(fun({X, _}) -> X > Expire end, Refs) of
       {[],  _Tail} ->
-         cache_put(Key, Val, S);
+         cache_put(Key, Val, State);
       {Head, Tail} ->
-         [Heap | Rest] = lists:reverse(Head),
-         true = ets:insert(Heap#heap.id, {Key, Val}),
+         [{_, Heap} | Rest] = lists:reverse(Head),
+         true = ets:insert(Heap, {Key, Val}),
          lists:foreach(
-            fun(X) -> ets:delete(X#heap.id, Key) end,
+            fun({_, X}) -> ets:delete(X, Key) end,
             Rest ++ Tail
          ),
-         cache_util:stats(S#cache.stats, {cache, S#cache.name, put}),
-         ?DEBUG("cache ~p: put ~p to heap ~p~n", [S#cache.name, Key, Heap#heap.id]),
-         S
+         cache_util:stats(State#cache.stats, {cache, State#cache.name, put}),
+         ?DEBUG("cache ~p: put ~p to heap ~p~n", [State#cache.name, Key, Heap]),
+         State
    end.
 
 %%
@@ -412,19 +398,19 @@ cache_get(Key, #cache{policy=mru}=S) ->
    cache_lookup(Key, S);
 
 cache_get(Key, #cache{}=S) ->
-   Head = hd(S#cache.heap),
-   case heap_lookup(Key, S#cache.heap) of
+   {_, Head} = cache_heap:head(S#cache.heap),
+   case heap_lookup(Key, cache_heap:refs(S#cache.heap)) of
       undefined   ->
          cache_util:stats(S#cache.stats, {cache, S#cache.name, miss}),
          undefined;
-      {Heap, Val} when Heap#heap.id =:= Head#heap.id ->
-         ?DEBUG("cache ~p: get ~p at cell ~p~n", [S#cache.name, Key, Heap#heap.id]),
+      {Head, Val} ->
+         ?DEBUG("cache ~p: get ~p at cell ~p~n", [S#cache.name, Key, Head]),
          cache_util:stats(S#cache.stats, {cache, S#cache.name, hit}),
          Val;
       {Heap, Val} ->
-         true = ets:insert(Head#heap.id, {Key, Val}),
-         _    = ets:delete(Heap#heap.id, Key),
-         ?DEBUG("cache ~p: get ~p at cell ~p~n", [S#cache.name, Key, Heap#heap.id]),
+         true = ets:insert(Head, {Key, Val}),
+         _    = ets:delete(Heap, Key),
+         ?DEBUG("cache ~p: get ~p at cell ~p~n", [S#cache.name, Key, Heap]),
          cache_util:stats(S#cache.stats, {cache, S#cache.name, hit}),
          Val
    end.
@@ -432,12 +418,12 @@ cache_get(Key, #cache{}=S) ->
 %%
 %% lookup cache value
 cache_lookup(Key, #cache{}=S) ->
-   case heap_lookup(Key, S#cache.heap) of
+   case heap_lookup(Key, cache_heap:refs(S#cache.heap)) of
       undefined   ->
          cache_util:stats(S#cache.stats, {cache, S#cache.name, miss}),
          undefined;
-      {_Heap, Val} ->
-         ?DEBUG("cache ~p: get ~p at cell ~p~n", [S#cache.name, Key, Heap#heap.id]),
+      {Heap, Val} ->
+         ?DEBUG("cache ~p: get ~p at cell ~p~n", [S#cache.name, Key, Heap]),
          cache_util:stats(S#cache.stats, {cache, S#cache.name, hit}),
          Val
    end.
@@ -445,30 +431,30 @@ cache_lookup(Key, #cache{}=S) ->
 %%
 %% check if key exists
 cache_has(Key, #cache{}=S) ->
-   case heap_has(Key, S#cache.heap) of
-      false   ->
+   case heap_has(Key, cache_heap:refs(S#cache.heap)) of
+      false  ->
          false;
-      _Heap   ->
-         ?DEBUG("cache ~p: has ~p at cell ~p~n", [S#cache.name, Key, Heap#heap.id]),
+      Heap   ->
+         ?DEBUG("cache ~p: has ~p at cell ~p~n", [S#cache.name, Key, Heap]),
          true
    end.
 
 %%
 %% check key ttl
 cache_ttl(Key, #cache{}=S) ->
-   case heap_has(Key, S#cache.heap) of
-      false   ->
+   case heap_has(Key, cache_heap:refs(S#cache.heap)) of
+      false       ->
          undefined;
-      Heap    ->
-         Heap#heap.expire - cache_util:now()
+      {Expire, _} ->
+         Expire - cache_util:now()
    end.
 
 %%
 %%
 cache_remove(Key, #cache{}=S) ->
    lists:foreach(
-      fun(X) -> ets:delete(X#heap.id, Key) end,
-      S#cache.heap
+      fun({_, X}) -> ets:delete(X, Key) end,
+      cache_heap:refs(S#cache.heap)
    ),
    cache_util:stats(S#cache.stats, {cache, S#cache.name, remove}),
    ?DEBUG("cache ~p: remove ~p~n", [S#cache.name, Key]),
@@ -509,10 +495,10 @@ tuple_acc(List, X) ->
 
 %%
 %%
-heap_lookup(Key, [H | Tail]) ->
-   case ets:lookup(H#heap.id, Key) of
+heap_lookup(Key, [{_, Heap} | Tail]) ->
+   case ets:lookup(Heap, Key) of
       []         -> heap_lookup(Key, Tail);
-      [{_, Val}] -> {H, Val}
+      [{_, Val}] -> {Heap, Val}
    end;
 
 heap_lookup(_Key, []) ->
@@ -520,73 +506,73 @@ heap_lookup(_Key, []) ->
 
 %%
 %%
-heap_has(Key, [H | Tail]) ->
-   case ets:member(H#heap.id, Key) of
+heap_has(Key, [{_, Heap}=X | Tail]) ->
+   case ets:member(Heap, Key) of
       false  -> heap_has(Key, Tail);
-      true   -> H
+      true   -> X
    end;
 
 heap_has(_Key, []) ->
    false.
 
 
-%%
-%% init cache heap
-init_heap(#cache{}=S) ->
-   Id = ets:new(undefined, [S#cache.type, protected]),
-   ?DEBUG("cache ~p: init heap ~p~n", [S#cache.name, Id]),
-   Heap = #heap{
-      id          = Id,
-      expire      = cache_util:madd(S#cache.ttl,  cache_util:now()),
-      cardinality = cache_util:mdiv(S#cache.cardinality, S#cache.n),
-      memory      = cache_util:mdiv(S#cache.memory,      S#cache.n)
-   },
-   S#cache{
-      heap = [Heap | S#cache.heap]
-   }.
+% %%
+% %% init cache heap
+% init_heap(#cache{}=S) ->
+%    Id = ets:new(undefined, [S#cache.type, protected]),
+%    ?DEBUG("cache ~p: init heap ~p~n", [S#cache.name, Id]),
+%    Heap = #heap{
+%       id          = Id,
+%       expire      = cache_util:madd(S#cache.ttl,  cache_util:now()),
+%       cardinality = cache_util:mdiv(S#cache.cardinality, S#cache.n),
+%       memory      = cache_util:mdiv(S#cache.memory,      S#cache.n)
+%    },
+%    S#cache{
+%       heap = [Heap | S#cache.heap]
+%    }.
 
-%%
-%%
-free_heap(#cache{}=S) ->
-   [H | Tail] = lists:reverse(S#cache.heap),
-   Size = ets:info(H#heap.id, size),
-   cache_util:stats(S#cache.stats, {cache, S#cache.name, evicted}, Size),
-   destroy_heap(H#heap.id, S#cache.heir),
-   ?DEBUG("cache ~p: free heap ~p~n", [S#cache.name, H#heap.id]),
-   init_heap(
-      S#cache{
-         heap = lists:reverse(Tail)
-      }
-   ).
+% %%
+% %%
+% free_heap(#cache{}=S) ->
+%    [H | Tail] = lists:reverse(S#cache.heap),
+%    Size = ets:info(H#heap.id, size),
+%    cache_util:stats(S#cache.stats, {cache, S#cache.name, evicted}, Size),
+%    destroy_heap(H#heap.id, S#cache.heir),
+%    ?DEBUG("cache ~p: free heap ~p~n", [S#cache.name, H#heap.id]),
+%    init_heap(
+%       S#cache{
+%          heap = lists:reverse(Tail)
+%       }
+%    ).
    
-destroy_heap(Id, undefined) ->
-   ets:delete(Id);
-destroy_heap(Id, Heir)
- when is_pid(Heir) ->
-   ets:give_away(Id, Heir, evicted);
-destroy_heap(Id, Heir)
- when is_atom(Heir) ->
-   case erlang:whereis(Heir) of
-      undefined ->
-         ets:delete(Id);
-      Pid       ->
-         ets:give_away(Id, Pid, evicted)
-   end.
+% destroy_heap(Id, undefined) ->
+%    ets:delete(Id);
+% destroy_heap(Id, Heir)
+%  when is_pid(Heir) ->
+%    ets:give_away(Id, Heir, evicted);
+% destroy_heap(Id, Heir)
+%  when is_atom(Heir) ->
+%    case erlang:whereis(Heir) of
+%       undefined ->
+%          ets:delete(Id);
+%       Pid       ->
+%          ets:give_away(Id, Pid, evicted)
+%    end.
 
 
-%%
-%% heap policy check
-is_heap_out_of_quota(#heap{}=H) ->
-   is_out_of_memory(H) orelse is_out_of_capacity(H).
+% %%
+% %% heap policy check
+% is_heap_out_of_quota(#heap{}=H) ->
+%    is_out_of_memory(H) orelse is_out_of_capacity(H).
 
-is_out_of_capacity(#heap{cardinality=undefined}) ->
-   false;
-is_out_of_capacity(#heap{cardinality=N}=H) ->
-   ets:info(H#heap.id, size) >= N.
+% is_out_of_capacity(#heap{cardinality=undefined}) ->
+%    false;
+% is_out_of_capacity(#heap{cardinality=N}=H) ->
+%    ets:info(H#heap.id, size) >= N.
 
-is_out_of_memory(#heap{memory=undefined}) ->
-   false;
-is_out_of_memory(#heap{memory=N}=H) ->
-   ets:info(H#heap.id, memory) >= N.
+% is_out_of_memory(#heap{memory=undefined}) ->
+%    false;
+% is_out_of_memory(#heap{memory=N}=H) ->
+%    ets:info(H#heap.id, memory) >= N.
 
 

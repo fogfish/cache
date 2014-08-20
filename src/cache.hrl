@@ -14,12 +14,7 @@
 %%   limitations under the License.
 %%
 
-%%
-%% define default select limit
--define(CONFIG_SELECT,   1000).
-
-
-%-define(VERBOSE, true).
+% -define(VERBOSE, true).
 -ifdef(VERBOSE).
    -define(DEBUG(Str, Args), error_logger:error_msg(Str, Args)).
 -else.
@@ -35,7 +30,7 @@
 -define(DEF_CACHE_N,      10).
 
 %% default cache house keeping frequency
--define(DEF_CACHE_QUOTA,   5). 
+-define(DEF_CACHE_CHECK,   20000). 
 
 %% default cache i/o timeout
 -define(DEF_CACHE_TIMEOUT, 60000).

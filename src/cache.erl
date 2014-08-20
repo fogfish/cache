@@ -327,7 +327,7 @@ append(Cache, Key, Val) ->
    gen_server:call(Cache, {append, Key, Val}, ?DEF_CACHE_TIMEOUT).
 
 %%
-%% synchronously add data to existing key after existing data, the operation do not prolong entry ttl
+%% asynchronously add data to existing key after existing data, the operation do not prolong entry ttl
 -spec(append_/3  :: (cache(), key(), entity()) -> ok).
 
 append_(Cache, Key, Val) ->

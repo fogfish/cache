@@ -18,7 +18,7 @@
 -module(cache_util).
 
 -export([
-   mdiv/2, madd/2, mmul/2, now/0, stats/2, stats/3, timeout/2
+   mdiv/2, madd/2, mmul/2, now/0, stats/2, stats/3
 ]).
 
 %%
@@ -68,18 +68,5 @@ stats({M, F}, Counter, Val) ->
 stats(Fun,    Counter, Val)
  when is_function(Fun) ->
    Fun(Counter, Val).
-
-%%
-%% set / reset timeout
-timeout(T, Msg)
- when is_integer(T) ->
-   {clock, T, erlang:send_after(T, self(), Msg)};
-
-timeout({clock, T, Timer}, Msg) ->
-   erlang:cancel_timer(Timer),
-   {clock, T, erlang:send_after(T, self(), Msg)};
-
-timeout(X, _) ->
-   X.
 
 

@@ -1,13 +1,8 @@
 {application, cache,
    [
       {description, "in-memory cache"},
-      {vsn,         "0.11.1"},
-      {modules,     [
-         cache,
-         cache_bucket,
-         cache_sup, 
-         cache_app
-      ]},
+      {vsn,         "1.0.0"},
+      {modules,     []},
       {registered,  []},
       {applications,[
          kernel,
