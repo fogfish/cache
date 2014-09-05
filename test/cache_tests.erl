@@ -25,20 +25,111 @@
    {check, 1}    %% check eviction status 1 sec
 ]).
 
-lru_test_() ->
-   {
-      setup,
-      fun cache_init/0,
-      fun cache_free/1,
-      [
-         {"put",         fun cache_put/0}
-        ,{"has",         fun cache_has/0}
-        ,{"get",         fun cache_get/0}
-        ,{"del",         fun cache_del/0}
-        ,{"acc",         fun cache_acc/0}
-        ,{"lifecycle 1", {timeout, 10000, fun cache_lc1/0}}
+
+%%%----------------------------------------------------------------------------   
+%%%
+%%% suites
+%%%
+%%%----------------------------------------------------------------------------   
+
+cache_interface_test_() ->
+   {foreach,
+      fun init/0
+     ,fun free/1
+     ,[
+         fun i/1
+        ,fun heap/1
+        ,fun put/1
+        ,fun get/1
       ]
    }.
+
+
+% lru_test_() ->
+%    {
+%       setup,
+%       fun cache_init/0,
+%       fun cache_free/1,
+%       [
+%          {"put",         fun cache_put/0}
+%         ,{"has",         fun cache_has/0}
+%         ,{"get",         fun cache_get/0}
+%         ,{"del",         fun cache_del/0}
+%         ,{"acc",         fun cache_acc/0}
+%         ,{"lifecycle 1", {timeout, 10000, fun cache_lc1/0}}
+%       ]
+%    }.
+
+%%%----------------------------------------------------------------------------   
+%%%
+%%% factory
+%%%
+%%%----------------------------------------------------------------------------   
+
+init() ->
+   {ok, Pid} = cache:start_link(?CACHE),
+   Pid.
+
+free(Pid) ->
+   erlang:unlink(Pid),
+   cache:drop(Pid).
+
+
+%%%----------------------------------------------------------------------------   
+%%%
+%%% unit test
+%%%
+%%%----------------------------------------------------------------------------   
+
+i(Pid) ->
+   [
+      ?_assertMatch({_, _}, lists:keyfind(heap,   1, cache:i(Pid)))
+     ,?_assertMatch({_, _}, lists:keyfind(size,   1, cache:i(Pid)))
+     ,?_assertMatch({_, _}, lists:keyfind(memory, 1, cache:i(Pid)))
+     ,?_assertMatch({_, _}, lists:keyfind(expire, 1, cache:i(Pid)))
+     ,?_assertMatch([_| _], cache:i(Pid, heap))
+     ,?_assertMatch([_| _], cache:i(Pid, size))
+     ,?_assertMatch([_| _], cache:i(Pid, memory))
+     ,?_assertMatch([_| _], cache:i(Pid, expire))
+   ].
+
+heap(Pid) ->
+   [
+      ?_assertMatch(true,   is_integer(cache:heap(Pid, 1)))
+     ,?_assertMatch(badarg, cache:heap(Pid, 2))
+   ].
+
+put(Pid) ->
+   [
+      ?_assertMatch(ok, cache:put(Pid, <<"key-1">>, <<"val-1">>))
+     ,?_assertMatch(ok, cache:put(Pid, <<"key-2">>, <<"val-2">>, 5))
+     ,?_assertMatch(ok, cache:put_(Pid, <<"key-3">>, <<"val-3">>))
+     ,?_assertMatch(ok, cache:put_(Pid, <<"key-4">>, <<"val-4">>, 5))
+   ].
+
+get(Pid) ->
+   [
+      ?_assertMatch(ok, cache:put(Pid, <<"key-1">>, <<"val-1">>))
+     ,?_assertMatch(<<"val-1">>, cache:get(Pid, <<"key-1">>))
+     ,?_assertMatch(<<"val-1">>, cache:lookup(Pid, <<"key-1">>))
+     ,?_assertMatch(true,        cache:has(Pid, <<"key-1">>))
+
+     ,?_assertMatch(ok, cache:put_(Pid, <<"key-3">>, <<"val-3">>))
+     ,?_assertMatch(<<"val-3">>, cache:get(Pid, <<"key-3">>))
+     ,?_assertMatch(<<"val-3">>, cache:lookup(Pid, <<"key-3">>))
+     ,?_assertMatch(true,        cache:has(Pid, <<"key-3">>))
+
+     ,?_assertMatch(undefined,   cache:get(Pid, <<"key-5">>))     
+     ,?_assertMatch(undefined,   cache:lookup(Pid, <<"key-5">>))     
+     ,?_assertMatch(false,       cache:has(Pid, <<"key-5">>))     
+   ].
+
+
+%% @todo - fix ttl and segment expire time
+
+
+
+
 
 cache_init() ->
    cache:start_link(test, ?CACHE).
@@ -73,7 +164,6 @@ cache_acc() ->
    {20, 30, 30, 40} = cache:get(test, <<"acc1">>).
 
 cache_lc1() ->
-   error_logger:error_msg("~n~n life-cycle #1"),
    ok  = cache:put(test, key, val),
    timer:sleep(1200),
    val = cache:get(test, key),

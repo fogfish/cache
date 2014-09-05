@@ -192,7 +192,7 @@ handle_call(i, _, State) ->
 
 handle_call({heap, N}, _, State) ->
    try
-      Ref = lists:nth(N, cache_heap:refs(State#cache.heap)),
+      {_, Ref} = lists:nth(N, cache_heap:refs(State#cache.heap)),
       {reply, Ref, State}
    catch _:_ ->
       {reply, badarg, State}
@@ -300,49 +300,6 @@ handle_info(evict_heap, #cache{n=N, evict=Evict}=State) ->
       _ ->
          {noreply, State#cache{heap=Heap}}
    end;
-
-
-% handle_info(evict, S) ->
-%    Now = cache_util:now(),
-%    case lists:last(S#cache.heap) of
-%       H when H#heap.expire =< Now ->
-%          {noreply,
-%             free_heap(
-%                S#cache{evict = cache_util:timeout(S#cache.evict, evict)}
-%             )
-%          };
-%       _ ->
-%          {noreply,
-%             init_heap(
-%                S#cache{evict = cache_util:timeout(S#cache.evict, evict)} 
-%             )
-%          }
-%    end;
-
-% handle_info(quota, S) ->
-%    case is_heap_out_of_quota(hd(S#cache.heap)) of
-%       true  ->
-%          case length(S#cache.heap) of
-%             N when N =:= S#cache.n ->
-%                {noreply,
-%                   free_heap(
-%                      S#cache{quota = cache_util:timeout(S#cache.quota, quota)}
-%                   )
-%                };
-%             _ ->
-%                {noreply,
-%                   init_heap(
-%                      S#cache{quota = cache_util:timeout(S#cache.quota, quota)}
-%                   )
-%                }
-%          end;
-%       false ->
-%          {noreply,
-%             S#cache{
-%                quota = cache_util:timeout(S#cache.quota, quota)
-%             }
-%          }
-%    end;
 
 handle_info(_, S) ->
    {noreply, S}.
@@ -514,65 +471,4 @@ heap_has(Key, [{_, Heap}=X | Tail]) ->
 
 heap_has(_Key, []) ->
    false.
-
-
-% %%
-% %% init cache heap
-% init_heap(#cache{}=S) ->
-%    Id = ets:new(undefined, [S#cache.type, protected]),
-%    ?DEBUG("cache ~p: init heap ~p~n", [S#cache.name, Id]),
-%    Heap = #heap{
-%       id          = Id,
-%       expire      = cache_util:madd(S#cache.ttl,  cache_util:now()),
-%       cardinality = cache_util:mdiv(S#cache.cardinality, S#cache.n),
-%       memory      = cache_util:mdiv(S#cache.memory,      S#cache.n)
-%    },
-%    S#cache{
-%       heap = [Heap | S#cache.heap]
-%    }.
-
-% %%
-% %%
-% free_heap(#cache{}=S) ->
-%    [H | Tail] = lists:reverse(S#cache.heap),
-%    Size = ets:info(H#heap.id, size),
-%    cache_util:stats(S#cache.stats, {cache, S#cache.name, evicted}, Size),
-%    destroy_heap(H#heap.id, S#cache.heir),
-%    ?DEBUG("cache ~p: free heap ~p~n", [S#cache.name, H#heap.id]),
-%    init_heap(
-%       S#cache{
-%          heap = lists:reverse(Tail)
-%       }
-%    ).
-   
-% destroy_heap(Id, undefined) ->
-%    ets:delete(Id);
-% destroy_heap(Id, Heir)
-%  when is_pid(Heir) ->
-%    ets:give_away(Id, Heir, evicted);
-% destroy_heap(Id, Heir)
-%  when is_atom(Heir) ->
-%    case erlang:whereis(Heir) of
-%       undefined ->
-%          ets:delete(Id);
-%       Pid       ->
-%          ets:give_away(Id, Pid, evicted)
-%    end.
-
-
-% %%
-% %% heap policy check
-% is_heap_out_of_quota(#heap{}=H) ->
-%    is_out_of_memory(H) orelse is_out_of_capacity(H).
-
-% is_out_of_capacity(#heap{cardinality=undefined}) ->
-%    false;
-% is_out_of_capacity(#heap{cardinality=N}=H) ->
-%    ets:info(H#heap.id, size) >= N.
-
-% is_out_of_memory(#heap{memory=undefined}) ->
-%    false;
-% is_out_of_memory(#heap{memory=N}=H) ->
-%    ets:info(H#heap.id, memory) >= N.
-
 
