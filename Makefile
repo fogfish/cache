@@ -26,7 +26,7 @@ clean:
 	./rebar clean
 	rm -rf test.*-temp-data
 
-distclean: clean 
+distclean: clean
 	./rebar delete-deps
 
 test: all
@@ -42,7 +42,7 @@ run:
 	erl ${FLAGS}
 
 rebar:
-	curl -O http://cloud.github.com/downloads/basho/rebar/rebar
+	curl -O https://cloud.github.com/downloads/basho/rebar/rebar
 	chmod ugo+x rebar
 
 benchmark:
