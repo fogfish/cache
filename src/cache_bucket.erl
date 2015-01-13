@@ -376,11 +376,11 @@ cache_get(Key, #cache{}=S) ->
 %% lookup cache value
 cache_lookup(Key, #cache{}=S) ->
    case heap_lookup(Key, cache_heap:refs(S#cache.heap)) of
-      undefined   ->
+      undefined    ->
          cache_util:stats(S#cache.stats, {cache, S#cache.name, miss}),
          undefined;
-      {Heap, Val} ->
-         ?DEBUG("cache ~p: get ~p at cell ~p~n", [S#cache.name, Key, Heap]),
+      {_Heap, Val} ->
+         ?DEBUG("cache ~p: get ~p at cell ~p~n", [S#cache.name, Key, _Heap]),
          cache_util:stats(S#cache.stats, {cache, S#cache.name, hit}),
          Val
    end.
@@ -391,8 +391,8 @@ cache_has(Key, #cache{}=S) ->
    case heap_has(Key, cache_heap:refs(S#cache.heap)) of
       false  ->
          false;
-      Heap   ->
-         ?DEBUG("cache ~p: has ~p at cell ~p~n", [S#cache.name, Key, Heap]),
+      _Heap  ->
+         ?DEBUG("cache ~p: has ~p at cell ~p~n", [S#cache.name, Key, _Heap]),
          true
    end.
 
