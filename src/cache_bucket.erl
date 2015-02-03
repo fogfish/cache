@@ -79,7 +79,7 @@ init([], Opts, State) ->
    TTL  = proplists:get_value(ttl,    Opts, ?DEF_CACHE_TTL),
    Size = proplists:get_value(size,   Opts),
    Mem  = proplists:get_value(memory, Opts),
-   Evict= cache_util:mdiv(TTL,  State#cache.n) * 1000,
+   Evict= cache_util:mmul(cache_util:mdiv(TTL,  State#cache.n), 1000),
    Heap = cache_heap:new(
       Type
      ,cache_util:mdiv(TTL,  State#cache.n)
