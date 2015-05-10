@@ -31,7 +31,7 @@
 
 -include("cache.hrl").
 
--export([start/0]).
+%% cache management interface
 -export([
    start_link/1,
    start_link/2,
@@ -39,20 +39,27 @@
    purge/1,
    i/1,
    i/2,
-   heap/2,
+   heap/2
+]).
+%% basic cache i/o interface
+-export([
    put/3, 
    put/4, 
    put_/3, 
    put_/4,
    get/2, 
+   get_/2,
    lookup/2,
+   lookup_/2,
    has/2, 
    ttl/2,
    remove/2, 
-   remove_/2,
+   remove_/2
+]).
+%% extended cache i/o interface
+-export([
    acc/3,
    acc_/3,
-   % memecached like interface
    set/3,
    set/4,
    set_/3,
@@ -72,20 +79,25 @@
    delete/2,
    delete_/2
 ]).
+-export([start/0]).
 
 -export_type([cache/0]).
 
--type(cache()  :: atom() | {atom(), atom()} | {global, atom()} | pid()).
--type(name()   :: atom() | {global, atom()}).
+-type(cache()  :: atom() | pid()).
 -type(key()    :: any()).
--type(entity() :: any()).
+-type(val()    :: any()).
 -type(ttl()    :: integer()).
 
 %%
 %% RnD start application
 start() ->
-   application:start(pq),
    application:start(cache).
+
+%%%----------------------------------------------------------------------------   
+%%%
+%%% cache management interface
+%%%
+%%%----------------------------------------------------------------------------   
 
 %%
 %% start new cache bucket, accepted options:
@@ -99,7 +111,7 @@ start() ->
 %%    {stats,  function() | {Mod, Fun}} - cache statistic aggregate functor 
 %%    {heir,   atom() | pid()} - heir of evicted cache segments
 -spec(start_link/1 :: (list()) -> {ok, pid()} | {error, any()}).
--spec(start_link/2 :: (name(), list()) -> {ok, pid()} | {error, any()}).
+-spec(start_link/2 :: (atom(), list()) -> {ok, pid()} | {error, any()}).
 
 start_link(Opts) ->
    cache_bucket:start_link(Opts).
@@ -111,41 +123,21 @@ start_link(Cache, Opts) ->
 %% drop cache
 -spec(drop/1 :: (cache()) -> ok).
 
-drop(undefined) ->
-   ok;
-drop({global, Cache}) ->
-   drop(global:whereis_name(Cache));
-drop({Cache, Node}) ->
-   drop(rpc:call(Node, cache, drop, [Cache]));
-drop(Cache)
- when is_atom(Cache) ->
-   drop(whereis(Cache));
-drop(Cache)
- when is_pid(Cache) ->
+drop(Cache) ->
    gen_server:call(Cache, drop).
 
 %%
 %% purge cache
 -spec(purge/1 :: (cache()) -> ok).
 
-purge(undefined) ->
-   ok;
-purge({global, Cache}) ->
-   purge(global:whereis_name(Cache));
-purge({Cache, Node}) ->
-   purge(rpc:call(Node, cache, purge, [Cache]));
-purge(Cache)
- when is_atom(Cache) ->
-   purge(whereis(Cache));
-purge(Cache)
- when is_pid(Cache) ->
+purge(Cache) ->
    gen_server:call(Cache, purge).
 
 
 %%
 %% return cache meta data
-%%    {heap,   [integer()]} - cache segments references 
-%%    {expire, [integer()]} - cache segments expire times
+%%    {heap,   [integer()]} - references to cache segments 
+%%    {expire, [integer()]} - cache segments expiration times
 %%    {size,   [integer()]} - cardinality of cache segments
 %%    {memory, [integer()]} - memory occupied by each cache segment
 -spec(i/1 :: (cache()) -> list()).
@@ -165,94 +157,114 @@ heap(Cache, N) ->
    gen_server:call(Cache, {heap, N}).
 
 
+%%%----------------------------------------------------------------------------   
+%%%
+%%% basic cache i/o interface
+%%%
+%%%----------------------------------------------------------------------------   
+
 %%
 %% synchronous cache put
--spec(put/3  :: (cache(), key(), entity()) -> ok).
--spec(put/4  :: (cache(), key(), entity(), ttl()) -> ok).
+-spec(put/3  :: (cache(), key(), val()) -> ok).
+-spec(put/4  :: (cache(), key(), val(), ttl()) -> ok).
 
 put(Cache, Key, Val) ->
-   gen_server:call(Cache, {put, Key, Val}, ?DEF_CACHE_TIMEOUT).
+   cache:put(Cache, Key, Val, undefined).
 
 put(Cache, Key, Val, TTL) ->
-   gen_server:call(Cache, {put, Key, Val, TTL}, ?DEF_CACHE_TIMEOUT).
+   call(Cache, {put, Key, Val, TTL}).
 
 %%
 %% asynchronous cache put
--spec(put_/3 :: (cache(), key(), entity()) -> ok).
--spec(put_/4 :: (cache(), key(), entity(), ttl()) -> ok).
+-spec(put_/3 :: (cache(), key(), val()) -> reference()).
+-spec(put_/4 :: (cache(), key(), val(), ttl()) -> reference()).
 
 put_(Cache, Key, Val) ->
-   gen_server:cast(Cache, {put, Key, Val}).
+   cache:put_(Cache, Key, Val, undefined).
 
 put_(Cache, Key, Val, TTL) ->
-   gen_server:cast(Cache, {put, Key, Val, TTL}).
+   cast(Cache, {put, Key, Val, TTL}).
 
 %%
-%% synchronous get cache entry, the operation prolongs entry ttl
--spec(get/2 :: (cache(), key()) -> entity() | undefined).
+%% synchronous cache get, the operation prolongs value ttl
+-spec(get/2 :: (cache(), key()) -> val() | undefined).
 
 get(Cache, Key) ->
-   gen_server:call(Cache, {get, Key}, ?DEF_CACHE_TIMEOUT).
+   call(Cache, {get, Key}).
 
 %%
-%% synchronous lookup cache entry, the operation do not prolong entry ttl
--spec(lookup/2 :: (cache(), key()) -> entity() | undefined).
+%% asynchronous cache get, the operation prolongs value ttl
+-spec(get_/2 :: (cache(), key()) -> reference()).
+
+get_(Cache, Key) ->
+   cast(Cache, {get, Key}).
+
+%%
+%% synchronous cache lookup, the operation do not prolong entry ttl
+-spec(lookup/2 :: (cache(), key()) -> val() | undefined).
 
 lookup(Cache, Key) ->
-   gen_server:call(Cache, {lookup, Key}, ?DEF_CACHE_TIMEOUT).
+   call(Cache, {lookup, Key}).
+
+%%
+%% asynchronous cache lookup, the operation do not prolong entry ttl
+-spec(lookup_/2 :: (cache(), key()) -> reference()).
+
+lookup_(Cache, Key) ->
+   cast(Cache, {lookup, Key}).
 
 %%
 %% check if cache key exists, 
 -spec(has/2 :: (cache(), key()) -> true | false).
 
 has(Cache, Key) ->
-   gen_server:call(Cache, {has, Key}, ?DEF_CACHE_TIMEOUT).
+   call(Cache, {has, Key}).
 
 %%
 %% check entity at cache and return estimated ttl
 -spec(ttl/2 :: (cache(), key()) -> ttl() | false).
 
 ttl(Cache, Key) ->
-   gen_server:call(Cache, {ttl, Key}, ?DEF_CACHE_TIMEOUT).
+   call(Cache, {ttl, Key}).
 
 %%
 %% synchronous remove entry from cache
 -spec(remove/2  :: (cache(), key()) -> ok).
 
 remove(Cache, Key) ->
-   gen_server:call(Cache, {remove, Key}, ?DEF_CACHE_TIMEOUT).
+   call(Cache, {remove, Key}).
 
 %%
 %% asynchronous remove entry from cache
 -spec(remove_/2 :: (cache(), key()) -> ok).
 
 remove_(Cache, Key) ->
-   gen_server:cast(Cache, {remove, Key}).
+   cast(Cache, {remove, Key}).
+
+%%%----------------------------------------------------------------------------   
+%%%
+%%% extended cache i/o interface
+%%%
+%%%----------------------------------------------------------------------------   
 
 %%
 %% synchronous in-cache accumulator 
 -spec(acc/3  :: (cache(), key(), integer() | [{integer(), integer()}]) -> integer() | undefined).
 
 acc(Cache, Key, Val) ->
-   gen_server:call(Cache, {acc, Key, Val}, ?DEF_CACHE_TIMEOUT).
+   call(Cache, {acc, Key, Val}).
 
 %%
 %% asynchronous in-cache accumulator
 -spec(acc_/3 :: (cache(), key(), integer() | {integer(), integer()}) -> ok).
 
 acc_(Cache, Key, Val) ->
-   gen_server:cast(Cache, {acc, Key, Val}).
-
-%%%----------------------------------------------------------------------------   
-%%%
-%%% memcached-like interface
-%%%
-%%%----------------------------------------------------------------------------   
+   cast(Cache, {acc, Key, Val}).
 
 %%
 %% synchronous store key/val
--spec(set/3  :: (cache(), key(), entity()) -> ok).
--spec(set/4  :: (cache(), key(), entity(), ttl()) -> ok).
+-spec(set/3  :: (cache(), key(), val()) -> ok).
+-spec(set/4  :: (cache(), key(), val(), ttl()) -> ok).
 
 set(Cache, Key, Val) ->
    cache:put(Cache, Key, Val).
@@ -262,8 +274,8 @@ set(Cache, Key, Val, TTL) ->
 
 %%
 %% asynchronous store key/val
--spec(set_/3 :: (cache(), key(), entity()) -> ok).
--spec(set_/4 :: (cache(), key(), entity(), ttl()) -> ok).
+-spec(set_/3 :: (cache(), key(), val()) -> ok).
+-spec(set_/4 :: (cache(), key(), val(), ttl()) -> ok).
 
 set_(Cache, Key, Val) ->
    cache:put_(Cache, Key, Val).
@@ -271,83 +283,78 @@ set_(Cache, Key, Val) ->
 set_(Cache, Key, Val, TTL) ->
    cache:put_(Cache, Key, Val, TTL).
 
-
 %%
 %% synchronous store key/val only if cache does not already hold data for this key
--spec(add/3  :: (cache(), key(), entity()) -> ok | conflict).
--spec(add/4  :: (cache(), key(), entity(), ttl()) -> ok | conflict).
+-spec(add/3  :: (cache(), key(), val()) -> ok | {error, conflict}).
+-spec(add/4  :: (cache(), key(), val(), ttl()) -> ok | {error, conflict}).
 
 add(Cache, Key, Val) ->
-   gen_server:call(Cache, {add, Key, Val}, ?DEF_CACHE_TIMEOUT).
+   cache:add(Cache, Key, Val, undefined).
 
 add(Cache, Key, Val, TTL) ->
-   gen_server:call(Cache, {add, Key, Val, TTL}, ?DEF_CACHE_TIMEOUT).
+   call(Cache, {add, Key, Val, TTL}).
 
 %%
 %% asynchronous store key/val only if cache does not already hold data for this key
--spec(add_/3  :: (cache(), key(), entity()) -> ok).
--spec(add_/4  :: (cache(), key(), entity(), ttl()) -> ok).
+-spec(add_/3  :: (cache(), key(), val()) -> reference()).
+-spec(add_/4  :: (cache(), key(), val(), ttl()) -> reference()).
 
 add_(Cache, Key, Val) ->
-   gen_server:cast(Cache, {add, Key, Val}).
+   cache:add_(Cache, Key, Val, undefined).
 
 add_(Cache, Key, Val, TTL) ->
-   gen_server:cast(Cache, {add, Key, Val, TTL}).
-
+   cast(Cache, {add, Key, Val, TTL}).
 
 %%
 %% synchronous store key/val only if cache does hold data for this key
--spec(replace/3  :: (cache(), key(), entity()) -> ok | not_found).
--spec(replace/4  :: (cache(), key(), entity(), ttl()) -> ok | not_found).
+-spec(replace/3  :: (cache(), key(), val()) -> ok | {error, not_found}).
+-spec(replace/4  :: (cache(), key(), val(), ttl()) -> ok | {error, not_found}).
 
 replace(Cache, Key, Val) ->
-   gen_server:call(Cache, {replace, Key, Val}, ?DEF_CACHE_TIMEOUT).
+   cache:replace(Cache, Key, Val, undefined).
 
 replace(Cache, Key, Val, TTL) ->
-   gen_server:call(Cache, {replace, Key, Val, TTL}, ?DEF_CACHE_TIMEOUT).
-
+   call(Cache, {replace, Key, Val, TTL}).
 
 %%
 %% asynchronous store key/val only if cache does hold data for this key
--spec(replace_/3  :: (cache(), key(), entity()) -> ok).
--spec(replace_/4  :: (cache(), key(), entity(), ttl()) -> ok).
+-spec(replace_/3  :: (cache(), key(), val()) -> reference()).
+-spec(replace_/4  :: (cache(), key(), val(), ttl()) -> reference()).
 
 replace_(Cache, Key, Val) ->
-   gen_server:cast(Cache, {replace, Key, Val}).
+   cache:replace_(Cache, Key, Val).
 
 replace_(Cache, Key, Val, TTL) ->
-   gen_server:cast(Cache, {replace, Key, Val, TTL}).
-
+   cast(Cache, {replace, Key, Val, TTL}).
 
 %%
 %% synchronously add data to existing key after existing data, the operation do not prolong entry ttl
--spec(append/3  :: (cache(), key(), entity()) -> ok | not_found).
+-spec(append/3  :: (cache(), key(), val()) -> ok | {error, not_found}).
 
 append(Cache, Key, Val) ->
-   gen_server:call(Cache, {append, Key, Val}, ?DEF_CACHE_TIMEOUT).
+   call(Cache, {append, Key, Val}).
 
 %%
 %% asynchronously add data to existing key after existing data, the operation do not prolong entry ttl
--spec(append_/3  :: (cache(), key(), entity()) -> ok).
+-spec(append_/3  :: (cache(), key(), val()) -> reference()).
 
 append_(Cache, Key, Val) ->
-   gen_server:cast(Cache, {append, Key, Val}).
+   cast(Cache, {append, Key, Val}).
 
 
 %%
 %% synchronously add data to existing key before existing data
--spec(prepend/3  :: (cache(), key(), entity()) -> ok | not_found).
+-spec(prepend/3  :: (cache(), key(), val()) -> ok | {error, not_found}).
 
 prepend(Cache, Key, Val) ->
-   gen_server:call(Cache, {prepend, Key, Val}, ?DEF_CACHE_TIMEOUT).
+   call(Cache, {prepend, Key, Val}).
 
 %%
 %% asynchronously add data to existing key before existing data
--spec(prepend_/3  :: (cache(), key(), entity()) -> ok).
+-spec(prepend_/3  :: (cache(), key(), val()) -> reference()).
 
 prepend_(Cache, Key, Val) ->
    gen_server:cast(Cache, {prepend, Key, Val}).
-
 
 %%
 %% synchronous remove entry from cache
@@ -362,4 +369,23 @@ delete(Cache, Key) ->
 
 delete_(Cache, Key) ->
    cache:remove_(Cache, Key).
+
+
+%%%----------------------------------------------------------------------------   
+%%%
+%%% private
+%%%
+%%%----------------------------------------------------------------------------   
+
+%%
+%% synchronous call to server
+call(Pid, Req) ->
+   gen_server:call(Pid, Req, ?CONFIG_TIMEOUT).
+
+%%
+%% asynchronous call
+cast(Pid, Req) ->
+   Ref = erlang:make_ref(),
+   erlang:send(Pid, {'$gen_call', {self(), Ref}, Req}, [noconnect]),
+   Ref.
 

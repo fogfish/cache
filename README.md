@@ -8,7 +8,10 @@ The write operation always uses youngest segment. The read operation lookup key 
 
 The downside is inability to assign precise TTL per single cache entry. TTL is always approximated to nearest segment. (e.g. cache with 60 sec TTL and 10 segments has 6 sec accuracy on TTL) 
 
+## Change log
 
+ * 2.0.0 - various changes on asynchronous api, not compatible with version 1.x 
+ * 1.0.1 - production release
 
 ## Usage
 
@@ -16,8 +19,13 @@ The downside is inability to assign precise TTL per single cache entry. TTL is a
    application:start(cache).
    {ok, _} = cache:start_link(my_cache, [{n, 10}, {ttl, 60}]).
    
+   %% synchronous i/o
    ok  = cache:put(my_cache, <<"my key">>, <<"my value">>).
    Val = cache:get(my_cache, <<"my key">>).
+
+   %% asynchronous i/o
+   Ref = cache:get_(my_cache, <<"my key">>).
+   receive {Ref, Val} -> Val end.
 ```
 
 ### configuration via Erlang `sys.config`

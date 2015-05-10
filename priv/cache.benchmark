@@ -16,7 +16,6 @@
   ,{get,    5}
 ]}.
 
-%{cache, {mycache, 'cache@127.0.0.1'}}.
 {local, [
    {ttl,     20}
   ,{n,       10} 

@@ -33,4 +33,4 @@
 -define(DEF_CACHE_CHECK,   20000). 
 
 %% default cache i/o timeout
--define(DEF_CACHE_TIMEOUT, 60000).
+-define(CONFIG_TIMEOUT,  30000).

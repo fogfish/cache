@@ -103,83 +103,64 @@ terminate(_Reason, State) ->
 %%%
 %%%----------------------------------------------------------------------------   
 
-handle_call({put, Key, Val}, _, S) ->
-   {reply, ok, cache_put(Key, Val, S)};
+handle_call({put, Key, Val, TTL}, _, State) ->
+   {reply, ok, cache_put(Key, Val, TTL, State)};
 
-handle_call({put, Key, Val, TTL}, _, S) ->
-   {reply, ok, cache_put(Key, Val, cache_util:now() + TTL, S)};
+handle_call({get, Key}, _, State) ->
+   {reply, cache_get(Key, State), State};
 
-handle_call({get, Key}, _, S) ->
-   {reply, cache_get(Key, S), S};
+handle_call({lookup, Key}, _, State) ->
+   {reply, cache_lookup(Key, State), State};
 
-handle_call({lookup, Key}, _, S) ->
-   {reply, cache_lookup(Key, S), S};
+handle_call({has, Key}, _, State) ->
+   {reply, cache_has(Key, State), State};
 
-handle_call({has, Key}, _, S) ->
-   {reply, cache_has(Key, S), S};
+handle_call({ttl, Key}, _, State) ->
+   {reply, cache_ttl(Key, State), State};
 
-handle_call({ttl, Key}, _, S) ->
-   {reply, cache_ttl(Key, S), S};
+handle_call({remove, Key}, _, State) ->
+   {reply, ok, cache_remove(Key, State)};
 
-handle_call({remove, Key}, _, S) ->
-   {reply, ok, cache_remove(Key, S)};
+handle_call({acc, Key, Val}, _, State0) ->
+   {Result, State1} = cache_acc(Key, Val, State0),
+   {reply, Result, State1};
 
-handle_call({acc, Key, Val}, _, S) ->
-   {Reply, NS} = cache_acc(Key, Val, S),
-   {reply, Reply, NS};
-
-handle_call({add, Key, Val}, _, S) ->
-   case cache_has(Key, S) of
+handle_call({add, Key, Val, TTL}, _, State) ->
+   case cache_has(Key, State) of
       true  ->
-         {reply, conflict, S};
+         {reply, {error, conflict}, State};
       false ->
-         {reply, ok, cache_put(Key, Val, S)}
+         {reply, ok, cache_put(Key, Val, TTL, State)}
    end;
 
-handle_call({add, Key, Val, TTL}, _, S) ->
-   case cache_has(Key, S) of
+handle_call({replace, Key, Val, TTL}, _, State) ->
+   case cache_has(Key, State) of
       true  ->
-         {reply, conflict, S};
+         {reply, ok, cache_put(Key, Val, TTL, State)};
       false ->
-         {reply, ok, cache_put(Key, Val, cache_util:now() + TTL, S)}
+         {reply, {error, not_found}, State}
    end;
 
-handle_call({replace, Key, Val}, _, S) ->
-   case cache_has(Key, S) of
-      true  ->
-         {reply, ok, cache_put(Key, Val, S)};
-      false ->
-         {reply, not_found, S}
-   end;
-
-handle_call({replace, Key, Val, TTL}, _, S) ->
-   case cache_has(Key, S) of
-      true  ->
-         {reply, ok, cache_put(Key, Val, cache_util:now() + TTL, S)};
-      false ->
-         {reply, not_found, S}
-   end;
-
-handle_call({prepend, Key, Val}, _, S) ->
+handle_call({prepend, Key, Val}, _, State) ->
    % @todo: reduce one write
-   case cache_get(Key, S) of
+   case cache_get(Key, State) of
       undefined  ->
-         {reply, ok, cache_put(Key, [Val], S)};
+         {reply, ok, cache_put(Key, [Val], undefined, State)};
       X when is_list(X) ->
-         {reply, ok, cache_put(Key, [Val|X], S)};
+         {reply, ok, cache_put(Key, [Val|X], undefined, State)};
       X ->
-         {reply, ok, cache_put(Key, [Val,X], S)}
+         {reply, ok, cache_put(Key, [Val,X], undefined, State)}
    end;
 
-handle_call({append, Key, Val}, _, S) ->
+handle_call({append, Key, Val}, _, State) ->
    % @todo: reduce one write
-   case cache_get(Key, S) of
+   case cache_get(Key, State) of
       undefined  ->
-         {reply, ok, cache_put(Key, [Val], S)};
+         {reply, ok, cache_put(Key, [Val], undefined, State)};
       X when is_list(X) ->
-         {reply, ok, cache_put(Key, X++[Val], S)};
+         {reply, ok, cache_put(Key, X++[Val], undefined, State)};
       X ->
-         {reply, ok, cache_put(Key, [X, Val], S)}
+         {reply, ok, cache_put(Key, [X, Val], undefined, State)}
    end;
 
 handle_call(i, _, State) ->
@@ -209,73 +190,6 @@ handle_call(_, _, S) ->
 
 %%
 %%
-handle_cast({put, Key, Val}, S) ->
-   {noreply, cache_put(Key, Val, S)};
-
-handle_cast({put, Key, Val, TTL}, S) ->
-   {noreply, cache_put(Key, Val, cache_util:now() + TTL, S)};
-
-handle_cast({remove, Key}, S) ->
-   {noreply, cache_remove(Key, S)};
-
-handle_cast({acc, Key, Val}, S) ->
-   {_, NS} = cache_acc(Key, Val, S),
-   {noreply, NS};
-
-handle_cast({add, Key, Val}, S) ->
-   case cache_has(Key, S) of
-      true  ->
-         {noreply, S};
-      false ->
-         {noreply, cache_put(Key, Val, S)}
-   end;
-
-handle_cast({add, Key, Val, TTL}, S) ->
-   case cache_has(Key, S) of
-      true  ->
-         {noreply, S};
-      false ->
-         {noreply, cache_put(Key, Val, cache_util:now() + TTL, S)}
-   end;
-
-handle_cast({replace, Key, Val}, S) ->
-   case cache_has(Key, S) of
-      true  ->
-         {noreply, cache_put(Key, Val, S)};
-      false ->
-         {noreply, S}
-   end;
-
-handle_cast({replace, Key, Val, TTL}, S) ->
-   case cache_has(Key, S) of
-      true  ->
-         {noreply, cache_put(Key, Val, cache_util:now() + TTL, S)};
-      false ->
-         {noreply, S}
-   end;
-
-handle_cast({prepend, Key, Val}, S) ->
-   % @todo: reduce one write
-   case cache_get(Key, S) of
-      undefined  ->
-         {noreply, cache_put(Key, [Val], S)};
-      X when is_list(X) ->
-         {noreply, cache_put(Key, [Val|X], S)};
-      X ->
-         {noreply, cache_put(Key, [Val,X], S)}
-   end;
-
-handle_cast({append, Key, Val}, S) ->
-   % @todo: reduce one write
-   case cache_get(Key, S) of
-      undefined  ->
-         {noreply, cache_put(Key, [Val], S)};
-      X when is_list(X) ->
-         {noreply, cache_put(Key, X++[Val], S)};
-      X ->
-         {noreply, cache_put(Key, [X, Val], S)}
-   end;
-
 handle_cast(_, S) ->
    {noreply, S}.
 
@@ -309,7 +223,6 @@ handle_info(_, S) ->
 code_change(_Vsn, S, _Extra) ->
    {ok, S}.
 
-
 %%%----------------------------------------------------------------------------   
 %%%
 %%% private
@@ -318,88 +231,83 @@ code_change(_Vsn, S, _Extra) ->
 
 %%
 %% insert value to cache
-cache_put(Key, Val, #cache{heap=Heap}=State) ->
+cache_put(Key, Val, undefined, #cache{name=_Name, heap=Heap}=State) ->
    {_, Head} = cache_heap:head(Heap),
    true = ets:insert(Head, {Key, Val}),
-   lists:foreach(
-      fun({_, X}) -> ets:delete(X, Key) end, 
-      cache_heap:tail(Heap)
-   ),
-   cache_util:stats(State#cache.stats, {cache, State#cache.name, put}),
-   ?DEBUG("cache ~p: put ~p to heap ~p~n", [State#cache.name, Key, Head]),
-   State.
+   ok   = heap_remove(Key, cache_heap:tail(Heap)),
+   _    = stats(put, State),
+   ?DEBUG("cache ~p: put ~p to heap ~p~n", [_Name, Key, Head]),
+   State;
 
-cache_put(Key, Val, Expire, #cache{}=State) ->
-   Refs = cache_heap:refs(State#cache.heap),
+cache_put(Key, Val, TTL, #cache{name=_Name, heap=Heap}=State) ->
+   Expire = cache_util:now() + TTL,
+   Refs   = cache_heap:refs(Heap),
    case lists:splitwith(fun({X, _}) -> X > Expire end, Refs) of
       {[],  _Tail} ->
-         cache_put(Key, Val, State);
+         cache_put(Key, Val, undefined, State);
       {Head, Tail} ->
-         [{_, Heap} | Rest] = lists:reverse(Head),
-         true = ets:insert(Heap, {Key, Val}),
-         lists:foreach(
-            fun({_, X}) -> ets:delete(X, Key) end,
-            Rest ++ Tail
-         ),
-         cache_util:stats(State#cache.stats, {cache, State#cache.name, put}),
-         ?DEBUG("cache ~p: put ~p to heap ~p~n", [State#cache.name, Key, Heap]),
+         [{_, Inst} | Rest] = lists:reverse(Head),
+         true = ets:insert(Inst, {Key, Val}),
+         ok   = heap_remove(Key, Rest ++ Tail),
+         _    = stats(put, State),
+         ?DEBUG("cache ~p: put ~p to heap ~p~n", [_Name, Key, Inst]),
          State
    end.
 
 %%
 %% get cache value
-cache_get(Key, #cache{policy=mru}=S) ->
+cache_get(Key, #cache{policy=mru}=State) ->
    % cache MRU should not move key anywhere because
    % cache always evicts last generation
    % fall-back to cache lookup
-   cache_lookup(Key, S);
+   cache_lookup(Key, State);
 
-cache_get(Key, #cache{}=S) ->
-   {_, Head} = cache_heap:head(S#cache.heap),
-   case heap_lookup(Key, cache_heap:refs(S#cache.heap)) of
+cache_get(Key, #cache{name=_Name, heap=Heap}=State) ->
+   {_, Head} = cache_heap:head(Heap),
+   case heap_lookup(Key, cache_heap:refs(Heap)) of
       undefined   ->
-         cache_util:stats(S#cache.stats, {cache, S#cache.name, miss}),
+         stats(miss, State),
          undefined;
       {Head, Val} ->
-         ?DEBUG("cache ~p: get ~p at cell ~p~n", [S#cache.name, Key, Head]),
-         cache_util:stats(S#cache.stats, {cache, S#cache.name, hit}),
+         ?DEBUG("cache ~p: get ~p at cell ~p~n", [_Name, Key, Head]),
+         stats(hit, State),
          Val;
-      {Heap, Val} ->
+      {Cell, Val} ->
          true = ets:insert(Head, {Key, Val}),
-         _    = ets:delete(Heap, Key),
-         ?DEBUG("cache ~p: get ~p at cell ~p~n", [S#cache.name, Key, Heap]),
-         cache_util:stats(S#cache.stats, {cache, S#cache.name, hit}),
+         _    = ets:delete(Cell, Key),
+         ?DEBUG("cache ~p: get ~p at cell ~p~n", [_Name, Key, Cell]),
+         stats(hit, State),
          Val
    end.
 
 %%
 %% lookup cache value
-cache_lookup(Key, #cache{}=S) ->
-   case heap_lookup(Key, cache_heap:refs(S#cache.heap)) of
+cache_lookup(Key, #cache{name=_Name, heap=Heap}=State) ->
+   case heap_lookup(Key, cache_heap:refs(Heap)) of
       undefined    ->
-         cache_util:stats(S#cache.stats, {cache, S#cache.name, miss}),
+         stats(miss, State),
          undefined;
-      {_Heap, Val} ->
-         ?DEBUG("cache ~p: get ~p at cell ~p~n", [S#cache.name, Key, _Heap]),
-         cache_util:stats(S#cache.stats, {cache, S#cache.name, hit}),
+      {_Cell, Val} ->
+         ?DEBUG("cache ~p: get ~p at cell ~p~n", [_Name, Key, _Cell]),
+         stats(hit,  State),
          Val
    end.
 
 %%
 %% check if key exists
-cache_has(Key, #cache{}=S) ->
-   case heap_has(Key, cache_heap:refs(S#cache.heap)) of
+cache_has(Key, #cache{name=_Name, heap=Heap}) ->
+   case heap_has(Key, cache_heap:refs(Heap)) of
       false  ->
          false;
       _Heap  ->
-         ?DEBUG("cache ~p: has ~p at cell ~p~n", [S#cache.name, Key, _Heap]),
+         ?DEBUG("cache ~p: has ~p at cell ~p~n", [_Name, Key, _Heap]),
          true
    end.
 
 %%
 %% check key ttl
-cache_ttl(Key, #cache{}=S) ->
-   case heap_has(Key, cache_heap:refs(S#cache.heap)) of
+cache_ttl(Key,#cache{heap=Heap}) ->
+   case heap_has(Key, cache_heap:refs(Heap)) of
       false       ->
          undefined;
       {Expire, _} ->
@@ -408,35 +316,32 @@ cache_ttl(Key, #cache{}=S) ->
 
 %%
 %%
-cache_remove(Key, #cache{}=S) ->
-   lists:foreach(
-      fun({_, X}) -> ets:delete(X, Key) end,
-      cache_heap:refs(S#cache.heap)
-   ),
-   cache_util:stats(S#cache.stats, {cache, S#cache.name, remove}),
-   ?DEBUG("cache ~p: remove ~p~n", [S#cache.name, Key]),
-   S.
+cache_remove(Key, #cache{name=_Name, heap=Heap}=State) ->
+   ok = heap_remove(Key, cache_heap:refs(Heap)),
+   _  = stats(remove, State),
+   ?DEBUG("cache ~p: remove ~p~n", [_Name, Key]),
+   State.
 
 %%
 %% @todo: reduce one write
-cache_acc(Key, Val, S)
+cache_acc(Key, Val, State)
  when is_integer(Val) ->
-   case cache_get(Key, S) of
+   case cache_get(Key, State) of
       undefined ->
-         {undefined, cache_put(Key, Val, S)};
+         {undefined, cache_put(Key, Val, undefined, State)};
       X when is_integer(X) ->
-         {X, cache_put(Key, X + Val, S)};
+         {X, cache_put(Key, X + Val, undefined, State)};
       X when is_tuple(X) ->
-         {erlang:element(1, X), cache_put(Key, tuple_acc({1, Val}, X), S)};
+         {erlang:element(1, X), cache_put(Key, tuple_acc({1, Val}, X), undefined, State)};
       _  ->
-         {badarg, S}
+         {badarg, State}
    end;
-cache_acc(Key, Val, S) ->
-   case cache_get(Key, S) of
+cache_acc(Key, Val, State) ->
+   case cache_get(Key, State) of
       X when is_tuple(X) ->
-         {X, cache_put(Key, tuple_acc(Val, X), S)};
+         {X, cache_put(Key, tuple_acc(Val, X), undefined, State)};
       _  ->
-         {badarg, S}
+         {badarg, State}
    end.
 
 tuple_acc({Pos, Val}, X) ->
@@ -448,6 +353,15 @@ tuple_acc(List, X) ->
       end,
       X,
       List 
+   ).
+
+
+%%
+%% remove key from heap segments
+heap_remove(Key, Heap) ->
+   lists:foreach(
+      fun({_, Id}) -> ets:delete(Id, Key) end, 
+      Heap
    ).
 
 %%
@@ -471,4 +385,11 @@ heap_has(Key, [{_, Heap}=X | Tail]) ->
 
 heap_has(_Key, []) ->
    false.
+
+%%
+%% update statistic
+stats(_, #cache{stats = undefined}) ->
+   ok;
+stats(X, #cache{stats = Stats, name = Name}) ->
+   cache_util:stats(Stats, {cache, Name, X}).
 
