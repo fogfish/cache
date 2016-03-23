@@ -72,7 +72,7 @@ tail(#heap{segments=[_ | Tail]}) ->
    Tail.
 
 %%
-%% return tail
+%% return reference to all segments
 -spec(refs/1 :: (#heap{}) -> [{integer(), integer()}]).
 
 refs(#heap{segments=Refs}) ->
