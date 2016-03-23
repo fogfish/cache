@@ -201,9 +201,10 @@ handle_cast(_, State) ->
 %%
 handle_info(check_heap, #cache{n=N, check=Check}=State) ->
    erlang:send_after(Check, self(), check_heap),
-   Heap = cache_heap:slip(State#cache.heap),
+   {Reason, Heap} = cache_heap:slip(State#cache.heap),
    case cache_heap:size(Heap) of
       X when X > N ->
+         cache_util:stats(State#cache.stats, {cache, State#cache.name, Reason}),
          {noreply, State#cache{heap=cache_heap:drop(Heap, State#cache.heir)}};
       _ ->
          {noreply, State#cache{heap=Heap}}
@@ -211,9 +212,10 @@ handle_info(check_heap, #cache{n=N, check=Check}=State) ->
 
 handle_info(evict_heap, #cache{n=N, evict=Evict}=State) ->
    erlang:send_after(Evict, self(), evict_heap),
-   Heap = cache_heap:slip(State#cache.heap),
+   {Reason, Heap} = cache_heap:slip(State#cache.heap),
    case cache_heap:size(Heap) of
       X when X > N ->
+         cache_util:stats(State#cache.stats, {cache, State#cache.name, Reason}),
          {noreply, State#cache{heap=cache_heap:drop(Heap, State#cache.heir)}};
       _ ->
          {noreply, State#cache{heap=Heap}}

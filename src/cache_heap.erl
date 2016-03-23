@@ -79,19 +79,26 @@ refs(#heap{segments=Refs}) ->
    Refs.
 
 %%
-%% slip heap segments
--spec(slip/1 :: (#heap{}) -> #heap{}).
+%% slip heap segments and report reason
+-spec(slip/1 :: (#heap{}) -> {ok | ttl | oom | ooc , #heap{}}).
 
 slip(#heap{}=Heap) ->
    case is_expired(cache_util:now(), Heap) of
-      true  ->
-         init(Heap);
-      false ->
-         Heap
+      false  ->
+         {ok, Heap};
+      Reason ->
+         {Reason, init(Heap)}
    end.
 
 is_expired(Time, #heap{cardinality=C, memory=M, segments=[{Expire, Ref}|_]}) ->
-   Time >= Expire orelse ets:info(Ref, size) >= C orelse ets:info(Ref, memory) >= M.
+   case 
+      {Time >= Expire, ets:info(Ref, size) >= C, ets:info(Ref, memory) >= M}
+   of
+      {true, _, _} -> ttl;
+      {_, true, _} -> ooc;
+      {_, _, true} -> oom;
+      _            -> false
+   end.
 
 %%
 %% drop last segment 
