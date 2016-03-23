@@ -125,43 +125,21 @@ handle_call({acc, Key, Val}, _, State0) ->
    {Result, State1} = cache_acc(Key, Val, State0),
    {reply, Result, State1};
 
-handle_call({add, Key, Val, TTL}, _, State) ->
-   case cache_has(Key, State) of
-      true  ->
-         {reply, {error, conflict}, State};
-      false ->
-         {reply, ok, cache_put(Key, Val, TTL, State)}
-   end;
+handle_call({add, Key, Val, TTL}, _, State0) ->
+   {Result, State1} = cache_add(Key, Val, TTL, State0),
+   {reply, Result, State1};
 
-handle_call({replace, Key, Val, TTL}, _, State) ->
-   case cache_has(Key, State) of
-      true  ->
-         {reply, ok, cache_put(Key, Val, TTL, State)};
-      false ->
-         {reply, {error, not_found}, State}
-   end;
+handle_call({replace, Key, Val, TTL}, _, State0) ->
+   {Result, State1} = cache_replace(Key, Val, TTL, State0),
+   {reply, Result, State1};
 
-handle_call({prepend, Key, Val}, _, State) ->
-   % @todo: reduce one write
-   case cache_get(Key, State) of
-      undefined  ->
-         {reply, ok, cache_put(Key, [Val], undefined, State)};
-      X when is_list(X) ->
-         {reply, ok, cache_put(Key, [Val|X], undefined, State)};
-      X ->
-         {reply, ok, cache_put(Key, [Val,X], undefined, State)}
-   end;
+handle_call({prepend, Key, Val}, _, State0) ->
+   {Result, State1} = cache_prepend(Key, Val, State0),
+   {reply, Result, State1};
 
-handle_call({append, Key, Val}, _, State) ->
-   % @todo: reduce one write
-   case cache_get(Key, State) of
-      undefined  ->
-         {reply, ok, cache_put(Key, [Val], undefined, State)};
-      X when is_list(X) ->
-         {reply, ok, cache_put(Key, X++[Val], undefined, State)};
-      X ->
-         {reply, ok, cache_put(Key, [X, Val], undefined, State)}
-   end;
+handle_call({append, Key, Val}, _, State0) ->
+   {Result, State1} = cache_append(Key, Val, State0),
+   {reply, Result, State1};
 
 handle_call(i, _, State) ->
    Heap   = cache_heap:refs(State#cache.heap),
@@ -185,13 +163,39 @@ handle_call(drop, _, State) ->
 handle_call(purge, _, State) ->
    {reply, ok, State#cache{heap=cache_heap:purge(State#cache.heap, State#cache.heir)}};
 
-handle_call(_, _, S) ->
-   {noreply, S}.
+handle_call(_, _, State) ->
+   {noreply, State}.
 
 %%
 %%
-handle_cast(_, S) ->
-   {noreply, S}.
+handle_cast({put, Key, Val, TTL}, State) ->
+   {noreply, cache_put(Key, Val, TTL, State)};
+
+handle_cast({remove, Key}, State) ->
+   {noreply, cache_remove(Key, State)};
+
+handle_cast({acc, Key, Val}, State0) ->
+   {_, State1} = cache_acc(Key, Val, State0),
+   {noreply, State1};
+
+handle_cast({add, Key, Val, TTL}, State0) ->
+   {_, State1} = cache_add(Key, Val, TTL, State0),
+   {noreply, State1};
+
+handle_cast({replace, Key, Val, TTL}, State0) ->
+   {_, State1} = cache_replace(Key, Val, TTL, State0),
+   {noreply, State1};
+
+handle_cast({prepend, Key, Val}, State0) ->
+   {_, State1} = cache_prepend(Key, Val, State0),
+   {noreply, State1};
+
+handle_cast({append, Key, Val}, State0) ->
+   {_, State1} = cache_append(Key, Val, State0),
+   {noreply, State1};
+
+handle_cast(_, State) ->
+   {noreply, State}.
 
 %%
 %%
@@ -354,6 +358,53 @@ tuple_acc(List, X) ->
       X,
       List 
    ).
+
+
+%%
+%%
+cache_add(Key, Val, TTL, State) ->
+   case cache_has(Key, State) of
+      true  ->
+         {{error, conflict}, State};
+      false ->
+         {ok, cache_put(Key, Val, TTL, State)}
+   end.
+
+%%
+%%
+cache_replace(Key, Val, TTL, State) ->
+   case cache_has(Key, State) of
+      true  ->
+         {ok, cache_put(Key, Val, TTL, State)};
+      false ->
+         {{error, not_found}, State}
+   end.
+
+%%
+%%
+cache_prepend(Key, Val, State) ->
+   % @todo: reduce one write
+   case cache_get(Key, State) of
+      undefined  ->
+         {ok, cache_put(Key, [Val], undefined, State)};
+      X when is_list(X) ->
+         {ok, cache_put(Key, [Val|X], undefined, State)};
+      X ->
+         {ok, cache_put(Key, [Val,X], undefined, State)}
+   end.
+
+%%
+%%
+cache_append(Key, Val, State) ->
+   % @todo: reduce one write
+   case cache_get(Key, State) of
+      undefined  ->
+         {ok, cache_put(Key, [Val], undefined, State)};
+      X when is_list(X) ->
+         {ok, cache_put(Key, X++[Val], undefined, State)};
+      X ->
+         {ok, cache_put(Key, [X, Val], undefined, State)}
+   end.
 
 
 %%

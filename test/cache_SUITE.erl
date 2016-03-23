@@ -37,10 +37,12 @@
 %% cache basic i/o
 -export([
    put/1,
+   put_/1,
    get/1,
    lookup/1,
    has/1,
-   remove/1
+   remove/1,
+   remove_/1
 ]).
 
 %%
@@ -51,7 +53,9 @@
    add/1,
    replace/1,
    append/1,
+   append_/1,
    prepend/1,
+   prepend_/1,
    delete/1
 ]).
 
@@ -73,9 +77,9 @@ groups() ->
       {primitives, [parallel], 
          [lifecycle]},
       {basic_io, [parallel], 
-         [put, get, lookup, has, remove]},
+         [put, put_, get, lookup, has, remove, remove_]},
       {extended_io, [parallel], 
-         [acc, set, add, replace, append, prepend, delete]}
+         [acc, set, add, replace, append, append_, prepend, prepend_, delete]}
    ].
 
 
@@ -121,6 +125,13 @@ put(_Config) ->
    [{key, val}] = ets:lookup(cache:heap(Cache, 1), key),
    ok = cache:drop(Cache).
 
+put_(_Config) ->
+   {ok, Cache} = cache:start_link([]),
+   ok  = cache:put_(Cache, key, val),
+   val = cache:get(Cache, key),
+   ok  = cache:drop(Cache).
+
+
 get(_Config) ->
    {ok, Cache} = cache:start_link([]),
    ok  = cache:put(Cache, key, val),
@@ -150,6 +161,13 @@ remove(_Config) ->
    false= cache:has(Cache, key),
    ok = cache:drop(Cache).
    
+remove_(_Config) ->
+   {ok, Cache} = cache:start_link([]),
+   ok = cache:put(Cache, key, val),
+   true = cache:has(Cache, key),
+   ok = cache:remove_(Cache, key),   
+   false= cache:has(Cache, key),
+   ok = cache:drop(Cache).
 
 %%%----------------------------------------------------------------------------   
 %%%
@@ -193,6 +211,14 @@ append(_Config) ->
    [a, b, c] = cache:get(Cache, key),
    ok  = cache:drop(Cache).
 
+append_(_Config) ->
+   {ok, Cache} = cache:start_link([]),
+   ok  = cache:append_(Cache, key, a),
+   ok  = cache:append_(Cache, key, b),
+   ok  = cache:append_(Cache, key, c),
+   [a, b, c] = cache:get(Cache, key),
+   ok  = cache:drop(Cache).
+
 prepend(_Config) ->
    {ok, Cache} = cache:start_link([]),
    ok  = cache:prepend(Cache, key, a),
@@ -200,6 +226,14 @@ prepend(_Config) ->
    ok  = cache:prepend(Cache, key, b),
    [b, a] = cache:get(Cache, key),
    ok  = cache:prepend(Cache, key, c),
+   [c, b, a] = cache:get(Cache, key),
+   ok  = cache:drop(Cache).
+
+prepend_(_Config) ->
+   {ok, Cache} = cache:start_link([]),
+   ok  = cache:prepend_(Cache, key, a),
+   ok  = cache:prepend_(Cache, key, b),
+   ok  = cache:prepend_(Cache, key, c),
    [c, b, a] = cache:get(Cache, key),
    ok  = cache:drop(Cache).
 
