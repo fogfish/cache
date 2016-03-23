@@ -1,5 +1,7 @@
 # Segmented in-memory cache
 
+[![Build Status](https://secure.travis-ci.org/fogfish/cache.svg?branch=master)](http://travis-ci.org/fogfish/cache)
+
 Cache uses N disposable ETS tables instead of single one. The cache applies eviction and quota
 policies at segment level. The oldest ETS table is destroyed and new one is created when 
 quota or TTL criteria are exceeded.   
