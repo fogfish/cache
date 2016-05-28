@@ -130,7 +130,7 @@ start() ->
 %%    {size,   integer()} - cache cardinality quota
 %%    {n,      integer()} - number of cache segments
 %%    {ttl,    integer()} - default time-to-live in seconds
-%%    {quota,  integer()} - frequency of quota check in seconds
+%%    {check,  integer()} - frequency of quota check in seconds
 %%    {stats,  function() | {Mod, Fun}} - cache statistic aggregate functor 
 %%    {heir,   atom() | pid()} - heir of evicted cache segments
 -spec(start_link/1 :: (list()) -> {ok, pid()} | {error, any()}).
