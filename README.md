@@ -1,8 +1,5 @@
 # Segmented in-memory cache
 
-[![Build Status](https://secure.travis-ci.org/fogfish/cache.svg?branch=master)](http://travis-ci.org/fogfish/cache)
-[![Analytics](https://ga-beacon.appspot.com/UA-78986123-1/cache?flat)](https://github.com/fogfish/cache)
-
 Cache uses N disposable ETS tables instead of single one. The cache applies eviction and quota
 policies at segment level. The oldest ETS table is destroyed and new one is created when 
 quota or TTL criteria are exceeded.   
@@ -12,6 +9,9 @@ The write operation always uses youngest segment. The read operation lookup key 
 The downside is inability to assign precise TTL per single cache entry. TTL is always approximated to nearest segment. (e.g. cache with 60 sec TTL and 10 segments has 6 sec accuracy on TTL) 
 
 ## Change log
+
+[![Build Status](https://secure.travis-ci.org/fogfish/cache.svg?branch=master)](http://travis-ci.org/fogfish/cache)
+[![Analytics](https://ga-beacon.appspot.com/UA-78986123-1/cache?flat)](https://github.com/fogfish/cache)
 
  * 2.0.0 - various changes on asynchronous api, not compatible with version 1.x 
  * 1.0.1 - production release
