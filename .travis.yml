@@ -1,4 +1,7 @@
-script: make && make test
+install:
+   - make rebar
+script: 
+   - make && make test
 language: erlang
 otp_release:
    - 18.2.1
