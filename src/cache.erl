@@ -133,8 +133,8 @@ start() ->
 %%    {check,  integer()} - frequency of quota check in seconds
 %%    {stats,  function() | {Mod, Fun}} - cache statistic aggregate functor 
 %%    {heir,   atom() | pid()} - heir of evicted cache segments
--spec(start_link/1 :: (list()) -> {ok, pid()} | {error, any()}).
--spec(start_link/2 :: (atom(), list()) -> {ok, pid()} | {error, any()}).
+-spec(start_link(list()) -> {ok, pid()} | {error, any()}).
+-spec(start_link(atom(), list()) -> {ok, pid()} | {error, any()}).
 
 start_link(Opts) ->
    cache_bucket:start_link(Opts).
@@ -144,14 +144,14 @@ start_link(Cache, Opts) ->
 
 %%
 %% drop cache
--spec(drop/1 :: (cache()) -> ok).
+-spec(drop(cache()) -> ok).
 
 drop(Cache) ->
    gen_server:call(Cache, drop).
 
 %%
 %% purge cache
--spec(purge/1 :: (cache()) -> ok).
+-spec(purge(cache()) -> ok).
 
 purge(Cache) ->
    gen_server:call(Cache, purge).
@@ -163,8 +163,8 @@ purge(Cache) ->
 %%    {expire, [integer()]} - cache segments expiration times
 %%    {size,   [integer()]} - cardinality of cache segments
 %%    {memory, [integer()]} - memory occupied by each cache segment
--spec(i/1 :: (cache()) -> list()).
--spec(i/2 :: (cache(), atom()) -> list()).
+-spec(i(cache()) -> list()).
+-spec(i(cache(), atom()) -> list()).
 
 i(Cache) ->
    gen_server:call(Cache, i).   
@@ -174,7 +174,7 @@ i(Cache, Name) ->
 
 %%
 %% return nth cache segment (e.g. heap(..., 1) returns youngest segment)
--spec(heap/2 :: (cache(), integer()) -> integer() | badarg). 
+-spec(heap(cache(), integer()) -> integer() | badarg).
 
 heap(Cache, N) ->
    gen_server:call(Cache, {heap, N}).
@@ -188,9 +188,9 @@ heap(Cache, N) ->
 
 %%
 %% synchronous cache put
--spec(put/3  :: (cache(), key(), val()) -> ok).
--spec(put/4  :: (cache(), key(), val(), ttl()) -> ok).
--spec(put/5  :: (cache(), key(), val(), ttl(), timeout()) -> ok).
+-spec(put(cache(), key(), val()) -> ok).
+-spec(put(cache(), key(), val(), ttl()) -> ok).
+-spec(put(cache(), key(), val(), ttl(), timeout()) -> ok).
 
 put(Cache, Key, Val) ->
    cache:put(Cache, Key, Val, undefined, ?CONFIG_TIMEOUT).
@@ -204,9 +204,9 @@ put(Cache, Key, Val, TTL, Timeout) ->
 
 %%
 %% asynchronous cache put
--spec(put_/3 :: (cache(), key(), val()) -> ok | reference()).
--spec(put_/4 :: (cache(), key(), val(), ttl()) -> ok | reference()).
--spec(put_/5 :: (cache(), key(), val(), ttl(), true | false) -> ok | reference()).
+-spec(put_(cache(), key(), val()) -> ok | reference()).
+-spec(put_(cache(), key(), val(), ttl()) -> ok | reference()).
+-spec(put_(cache(), key(), val(), ttl(), true | false) -> ok | reference()).
 
 put_(Cache, Key, Val) ->
    cache:put_(Cache, Key, Val, undefined, false).
@@ -222,8 +222,8 @@ put_(Cache, Key, Val, TTL, false) ->
 
 %%
 %% synchronous cache get, the operation prolongs value ttl
--spec(get/2 :: (cache(), key()) -> val() | undefined).
--spec(get/3 :: (cache(), key(), timeout()) -> val() | undefined).
+-spec(get(cache(), key()) -> val() | undefined).
+-spec(get(cache(), key(), timeout()) -> val() | undefined).
 
 get(Cache, Key) ->
    cache:get(Cache, Key, ?CONFIG_TIMEOUT).
@@ -233,15 +233,15 @@ get(Cache, Key, Timeout) ->
 
 %%
 %% asynchronous cache get, the operation prolongs value ttl
--spec(get_/2 :: (cache(), key()) -> reference()).
+-spec(get_(cache(), key()) -> reference()).
 
 get_(Cache, Key) ->
    cast(Cache, {get, Key}).
 
 %%
 %% synchronous cache lookup, the operation do not prolong entry ttl
--spec(lookup/2 :: (cache(), key()) -> val() | undefined).
--spec(lookup/3 :: (cache(), key(), timeout()) -> val() | undefined).
+-spec(lookup(cache(), key()) -> val() | undefined).
+-spec(lookup(cache(), key(), timeout()) -> val() | undefined).
 
 lookup(Cache, Key) ->
    cache:lookup(Cache, Key, ?CONFIG_TIMEOUT).
@@ -251,15 +251,15 @@ lookup(Cache, Key, Timeout) ->
 
 %%
 %% asynchronous cache lookup, the operation do not prolong entry ttl
--spec(lookup_/2 :: (cache(), key()) -> reference()).
+-spec(lookup_(cache(), key()) -> reference()).
 
 lookup_(Cache, Key) ->
    cast(Cache, {lookup, Key}).
 
 %%
 %% check if cache key exists, 
--spec(has/2 :: (cache(), key()) -> true | false).
--spec(has/3 :: (cache(), key(), timeout()) -> true | false).
+-spec(has(cache(), key()) -> true | false).
+-spec(has(cache(), key(), timeout()) -> true | false).
 
 has(Cache, Key) ->
    cache:has(Cache, Key, ?CONFIG_TIMEOUT).   
@@ -269,8 +269,8 @@ has(Cache, Key, Timeout) ->
 
 %%
 %% check entity at cache and return estimated ttl
--spec(ttl/2 :: (cache(), key()) -> ttl() | false).
--spec(ttl/3 :: (cache(), key(), timeout()) -> ttl() | false).
+-spec(ttl(cache(), key()) -> ttl() | false).
+-spec(ttl(cache(), key(), timeout()) -> ttl() | false).
 
 ttl(Cache, Key) ->
    cache:ttl(Cache, Key, ?CONFIG_TIMEOUT).
@@ -280,8 +280,8 @@ ttl(Cache, Key, Timeout) ->
 
 %%
 %% synchronous remove entry from cache
--spec(remove/2  :: (cache(), key()) -> ok).
--spec(remove/3  :: (cache(), key(), timeout()) -> ok).
+-spec(remove(cache(), key()) -> ok).
+-spec(remove(cache(), key(), timeout()) -> ok).
 
 remove(Cache, Key) ->
    cache:remove(Cache, Key, ?CONFIG_TIMEOUT).
@@ -291,8 +291,8 @@ remove(Cache, Key, Timeout) ->
 
 %%
 %% asynchronous remove entry from cache
--spec(remove_/2 :: (cache(), key()) -> ok | reference()).
--spec(remove_/3 :: (cache(), key(), true | false) -> ok | reference()).
+-spec(remove_(cache(), key()) -> ok | reference()).
+-spec(remove_(cache(), key(), true | false) -> ok | reference()).
 
 remove_(Cache, Key) ->
    cache:remove_(Cache, Key, false).
@@ -311,8 +311,8 @@ remove_(Cache, Key, false) ->
 
 %%
 %% synchronous in-cache accumulator 
--spec(acc/3  :: (cache(), key(), acc()) -> integer() | undefined).
--spec(acc/4  :: (cache(), key(), acc(), timeout()) -> integer() | undefined).
+-spec(acc(cache(), key(), acc()) -> integer() | undefined).
+-spec(acc(cache(), key(), acc(), timeout()) -> integer() | undefined).
 
 acc(Cache, Key, Val) ->
    cache:acc(Cache, Key, Val, ?CONFIG_TIMEOUT).
@@ -322,8 +322,8 @@ acc(Cache, Key, Val, Timeout) ->
 
 %%
 %% asynchronous in-cache accumulator
--spec(acc_/3 :: (cache(), key(), acc()) -> ok | reference()).
--spec(acc_/4 :: (cache(), key(), acc(), true | false) -> ok).
+-spec(acc_(cache(), key(), acc()) -> ok | reference()).
+-spec(acc_(cache(), key(), acc(), true | false) -> ok).
 
 acc_(Cache, Key, Val) ->
    cache:acc_(Cache, Key, Val, false).
@@ -336,9 +336,9 @@ acc_(Cache, Key, Val, false) ->
 
 %%
 %% synchronous store key/val
--spec(set/3  :: (cache(), key(), val()) -> ok).
--spec(set/4  :: (cache(), key(), val(), ttl()) -> ok).
--spec(set/5  :: (cache(), key(), val(), ttl(), timeout()) -> ok).
+-spec(set(cache(), key(), val()) -> ok).
+-spec(set(cache(), key(), val(), ttl()) -> ok).
+-spec(set(cache(), key(), val(), ttl(), timeout()) -> ok).
 
 set(Cache, Key, Val) ->
    cache:put(Cache, Key, Val).
@@ -351,9 +351,9 @@ set(Cache, Key, Val, TTL, Timeout) ->
    
 %%
 %% asynchronous store key/val
--spec(set_/3 :: (cache(), key(), val()) -> ok | reference()).
--spec(set_/4 :: (cache(), key(), val(), ttl()) -> ok | reference()).
--spec(set_/5 :: (cache(), key(), val(), ttl(), true | false) -> ok | reference()).
+-spec(set_(cache(), key(), val()) -> ok | reference()).
+-spec(set_(cache(), key(), val(), ttl()) -> ok | reference()).
+-spec(set_(cache(), key(), val(), ttl(), true | false) -> ok | reference()).
 
 set_(Cache, Key, Val) ->
    cache:put_(Cache, Key, Val).
@@ -366,9 +366,9 @@ set_(Cache, Key, Val, TTL, Flag) ->
 
 %%
 %% synchronous store key/val only if cache does not already hold data for this key
--spec(add/3  :: (cache(), key(), val()) -> ok | {error, conflict}).
--spec(add/4  :: (cache(), key(), val(), ttl()) -> ok | {error, conflict}).
--spec(add/5  :: (cache(), key(), val(), ttl(), timeout()) -> ok | {error, conflict}).
+-spec(add(cache(), key(), val()) -> ok | {error, conflict}).
+-spec(add(cache(), key(), val(), ttl()) -> ok | {error, conflict}).
+-spec(add(cache(), key(), val(), ttl(), timeout()) -> ok | {error, conflict}).
 
 add(Cache, Key, Val) ->
    cache:add(Cache, Key, Val, undefined, ?CONFIG_TIMEOUT).
@@ -381,9 +381,9 @@ add(Cache, Key, Val, TTL, Timeout) ->
 
 %%
 %% asynchronous store key/val only if cache does not already hold data for this key
--spec(add_/3  :: (cache(), key(), val()) -> ok | reference()).
--spec(add_/4  :: (cache(), key(), val(), ttl()) -> ok | reference()).
--spec(add_/5  :: (cache(), key(), val(), ttl(), true | false) -> ok | reference()).
+-spec(add_(cache(), key(), val()) -> ok | reference()).
+-spec(add_(cache(), key(), val(), ttl()) -> ok | reference()).
+-spec(add_(cache(), key(), val(), ttl(), true | false) -> ok | reference()).
 
 add_(Cache, Key, Val) ->
    cache:add_(Cache, Key, Val, undefined, false).
@@ -399,9 +399,9 @@ add_(Cache, Key, Val, TTL, false) ->
 
 %%
 %% synchronous store key/val only if cache does hold data for this key
--spec(replace/3  :: (cache(), key(), val()) -> ok | {error, not_found}).
--spec(replace/4  :: (cache(), key(), val(), ttl()) -> ok | {error, not_found}).
--spec(replace/5  :: (cache(), key(), val(), ttl(), timeout()) -> ok | {error, not_found}).
+-spec(replace(cache(), key(), val()) -> ok | {error, not_found}).
+-spec(replace(cache(), key(), val(), ttl()) -> ok | {error, not_found}).
+-spec(replace(cache(), key(), val(), ttl(), timeout()) -> ok | {error, not_found}).
 
 replace(Cache, Key, Val) ->
    cache:replace(Cache, Key, Val, undefined, ?CONFIG_TIMEOUT).
@@ -414,9 +414,9 @@ replace(Cache, Key, Val, TTL, Timeout) ->
 
 %%
 %% asynchronous store key/val only if cache does hold data for this key
--spec(replace_/3  :: (cache(), key(), val()) -> ok | reference()).
--spec(replace_/4  :: (cache(), key(), val(), ttl()) -> ok | reference()).
--spec(replace_/5  :: (cache(), key(), val(), ttl(), true | false) -> ok | reference()).
+-spec(replace_(cache(), key(), val()) -> ok | reference()).
+-spec(replace_(cache(), key(), val(), ttl()) -> ok | reference()).
+-spec(replace_(cache(), key(), val(), ttl(), true | false) -> ok | reference()).
 
 replace_(Cache, Key, Val) ->
    cache:replace_(Cache, Key, Val, undefined, false).
@@ -434,8 +434,8 @@ replace_(Cache, Key, Val, TTL, false) ->
 %%
 %% synchronously add data to existing key after existing data, 
 %% the operation do not prolong entry ttl
--spec(append/3  :: (cache(), key(), val()) -> ok | {error, not_found}).
--spec(append/4  :: (cache(), key(), val(), timeout()) -> ok | {error, not_found}).
+-spec(append(cache(), key(), val()) -> ok | {error, not_found}).
+-spec(append(cache(), key(), val(), timeout()) -> ok | {error, not_found}).
 
 append(Cache, Key, Val) ->
    cache:append(Cache, Key, Val, ?CONFIG_TIMEOUT).
@@ -446,8 +446,8 @@ append(Cache, Key, Val, Timeout) ->
 %%
 %% asynchronously add data to existing key after existing data, 
 %% the operation do not prolong entry ttl
--spec(append_/3  :: (cache(), key(), val()) -> ok | reference()).
--spec(append_/4  :: (cache(), key(), val(), true | false) -> ok | reference()).
+-spec(append_(cache(), key(), val()) -> ok | reference()).
+-spec(append_(cache(), key(), val(), true | false) -> ok | reference()).
 
 append_(Cache, Key, Val) ->
    cache:append_(Cache, Key, Val, false).
@@ -461,8 +461,8 @@ append_(Cache, Key, Val, false) ->
 %%
 %% synchronously add data to existing key before existing data
 %% the operation do not prolong entry ttl
--spec(prepend/3  :: (cache(), key(), val()) -> ok | {error, not_found}).
--spec(prepend/4  :: (cache(), key(), val(), timeout()) -> ok | {error, not_found}).
+-spec(prepend(cache(), key(), val()) -> ok | {error, not_found}).
+-spec(prepend(cache(), key(), val(), timeout()) -> ok | {error, not_found}).
 
 prepend(Cache, Key, Val) ->
    cache:prepend(Cache, Key, Val, ?CONFIG_TIMEOUT).
@@ -473,8 +473,8 @@ prepend(Cache, Key, Val, Timeout) ->
 %%
 %% asynchronously add data to existing key before existing data
 %% the operation do not prolong entry ttl
--spec(prepend_/3  :: (cache(), key(), val()) -> reference()).
--spec(prepend_/4  :: (cache(), key(), val(), true | false) -> reference()).
+-spec(prepend_(cache(), key(), val()) -> reference()).
+-spec(prepend_(cache(), key(), val(), true | false) -> reference()).
 
 prepend_(Cache, Key, Val) ->
    cache:prepend_(Cache, Key, Val, false).
@@ -487,8 +487,8 @@ prepend_(Cache, Key, Val, false) ->
 
 %%
 %% synchronous remove entry from cache
--spec(delete/2  :: (cache(), key()) -> ok).
--spec(delete/3  :: (cache(), key(), timeout()) -> ok).
+-spec(delete(cache(), key()) -> ok).
+-spec(delete(cache(), key(), timeout()) -> ok).
 
 delete(Cache, Key) ->
    cache:remove(Cache, Key).
@@ -498,8 +498,8 @@ delete(Cache, Key, Timeout) ->
 
 %%
 %% asynchronous remove entry from cache
--spec(delete_/2 :: (cache(), key()) -> ok | reference()).
--spec(delete_/3 :: (cache(), key(), true | false) -> ok | reference()).
+-spec(delete_(cache(), key()) -> ok | reference()).
+-spec(delete_(cache(), key(), true | false) -> ok | reference()).
 
 delete_(Cache, Key) ->
    cache:remove_(Cache, Key).

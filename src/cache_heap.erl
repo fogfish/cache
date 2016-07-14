@@ -40,7 +40,7 @@
 
 %%
 %% create new empty heap
--spec(new/4 :: (atom(), integer(), integer(), integer()) -> #heap{}).
+-spec(new(atom(), integer(), integer(), integer()) -> #heap{}).
 
 new(Type, TTL, Cardinality, Memory) ->
    init(#heap{
@@ -52,35 +52,35 @@ new(Type, TTL, Cardinality, Memory) ->
 
 %%
 %% return size of heap (number of segments)
--spec(size/1 :: (#heap{}) -> integer()).
+-spec(size(#heap{}) -> integer()).
 
 size(#heap{segments=List}) ->
    length(List).
 
 %%
 %% return head
--spec(head/1 :: (#heap{}) -> {integer(), integer()}).
+-spec(head(#heap{}) -> {integer(), integer()}).
 
 head(#heap{segments=[Head | _]}) ->
    Head.
 
 %%
 %% return tail
--spec(tail/1 :: (#heap{}) -> [{integer(), integer()}]).
+-spec(tail(#heap{}) -> [{integer(), integer()}]).
 
 tail(#heap{segments=[_ | Tail]}) ->
    Tail.
 
 %%
 %% return reference to all segments
--spec(refs/1 :: (#heap{}) -> [{integer(), integer()}]).
+-spec(refs(#heap{}) -> [{integer(), integer()}]).
 
 refs(#heap{segments=Refs}) ->
    Refs.
 
 %%
 %% slip heap segments and report reason
--spec(slip/1 :: (#heap{}) -> {ok | ttl | oom | ooc , #heap{}}).
+-spec(slip(#heap{}) -> {ok | ttl | oom | ooc , #heap{}}).
 
 slip(#heap{}=Heap) ->
    case is_expired(cache_util:now(), Heap) of
@@ -102,7 +102,7 @@ is_expired(Time, #heap{cardinality=C, memory=M, segments=[{Expire, Ref}|_]}) ->
 
 %%
 %% drop last segment 
--spec(drop/2 :: (#heap{}, pid()) -> #heap{}).
+-spec(drop(#heap{}, pid()) -> #heap{}).
 
 drop(#heap{segments=Segments}=Heap, Heir) ->
    [{_, Ref}|T] = lists:reverse(Segments),
@@ -113,7 +113,7 @@ drop(#heap{segments=Segments}=Heap, Heir) ->
 
 %%
 %% purge cache segments
--spec(purge/2 :: (#heap{}, pid()) -> #heap{}).
+-spec(purge(#heap{}, pid()) -> #heap{}).
 
 purge(#heap{segments=Segments}=Heap, Heir) ->
    lists:foreach(fun({_, Ref}) -> free(Heir, Ref) end, Segments),
