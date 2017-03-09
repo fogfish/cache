@@ -121,6 +121,10 @@ handle_call({ttl, Key}, _, State) ->
 handle_call({remove, Key}, _, State) ->
    {reply, ok, cache_remove(Key, State)};
 
+handle_call({apply, Key, Fun}, _, State0) ->
+   {Result, State1} = cache_apply(Key, Fun, State0),
+   {reply, Result, State1};
+
 handle_call({acc, Key, Val}, _, State0) ->
    {Result, State1} = cache_acc(Key, Val, State0),
    {reply, Result, State1};
@@ -327,6 +331,16 @@ cache_remove(Key, #cache{name=_Name, heap=Heap}=State) ->
    _  = stats(remove, State),
    ?DEBUG("cache ~p: remove ~p~n", [_Name, Key]),
    State.
+
+%%
+%%
+cache_apply(Key, Fun, State) ->
+   case Fun(cache_get(Key, State)) of
+      undefined  ->
+         {undefined, State};
+      Val ->
+         {Val, cache_put(Key, Val, undefined, State)}
+   end.   
 
 %%
 %% @todo: reduce one write

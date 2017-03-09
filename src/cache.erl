@@ -62,7 +62,11 @@
    remove/2,  
    remove/3, 
    remove_/2,
-   remove_/3
+   remove_/3,
+   apply/3,
+   apply/4,
+   apply_/4,
+   apply_/3
 ]).
 %% extended cache i/o interface
 -export([
@@ -302,6 +306,36 @@ remove_(Cache, Key, true) ->
 
 remove_(Cache, Key, false) ->
    send(Cache, {remove, Key}).
+
+%%
+%% synchronous apply function to entity on cache
+%% the function maps element, the new value is returned
+%% the operation prolongs value ttl
+-spec apply(cache(), key(), fun((_) -> _)) -> val() | undefined.
+-spec apply(cache(), key(), fun((_) -> _), timeout()) -> val() | undefined.
+
+apply(Cache, Key, Fun) ->
+   cache:apply(Cache, Key, Fun, ?CONFIG_TIMEOUT).
+
+apply(Cache, Key, Fun, Timeout) ->
+   call(Cache, {apply, Key, Fun}, Timeout).
+
+
+%%
+%% asynchronous apply function to entity on cache
+%% the function maps element, the new value is returned
+%% the operation prolongs value ttl
+-spec apply_(cache(), key(), fun((_) -> _)) -> ok | reference().
+-spec apply_(cache(), key(), fun((_) -> _), true | false) -> ok | reference().
+
+apply_(Cache, Key, Fun) ->
+   cache:apply_(Cache, Key, Fun, false).
+
+apply_(Cache, Key, Fun, true) ->
+   cast(Cache, {apply, Key, Fun});
+
+apply_(Cache, Key, Fun, false) ->
+   cast(Cache, {apply, Key, Fun}).
 
 %%%----------------------------------------------------------------------------   
 %%%

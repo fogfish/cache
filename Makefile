@@ -4,7 +4,7 @@
 ## @description
 ##   Makefile to build and release Erlang applications using standard development tools
 ##
-## @version 0.11.5
+## @version 0.11.8
 
 #####################################################################
 ##
@@ -22,8 +22,11 @@ TEST   ?= ${APP}
 S3     ?=
 VMI    ?= fogfish/erlang
 NET    ?= lo0
-URL 	 ?= undefined
+URL    ?= undefined
 LATEST ?= latest
+
+## rebar version (no spaces at end)
+REBAR  ?= 3.3.2
 
 ## root path to benchmark framework
 BB     = ../basho_bench
@@ -46,17 +49,17 @@ EFLAGS = \
 ## self-extracting bundle wrapper
 BUNDLE_INIT = PREFIX=${PREFIX}\nREL=${PREFIX}/${REL}\nAPP=${APP}\nVSN=${VSN}\nLINE=`grep -a -n "BUNDLE:$$" $$0`\nmkdir -p $${REL}\ntail -n +$$(( $${LINE%%%%:*} + 1)) $$0 | gzip -vdc - | tar -C $${REL} -xvf - > /dev/null\n
 BUNDLE_FREE = exit\nBUNDLE:\n
-BUILDER = FROM ${VMI}\nRUN mkdir ${APP}\nCOPY . ${APP}/\nRUN cd ${APP} && make && make rel\n
+BUILDER = FROM ${VMI}\nARG VERSION=\nRUN mkdir ${APP}\nCOPY . ${APP}/\nRUN cd ${APP} && make VSN=\x24{VERSION} && make rel VSN=\x24{VERSION}\n
 CTRUN   = \
-	-module(test). \
-	-export([run/1]). \
-	run(Spec) -> \
-   	{ok, Test} = file:consult(Spec), \
-   	case lists:keyfind(node, 1, Test) of \
-      	false -> ct:run_test([{spec, Spec}]); \
+   -module(test). \
+   -export([run/1]). \
+   run(Spec) -> \
+      {ok, Test} = file:consult(Spec), \
+      Error = case lists:keyfind(node, 1, Test) of \
+         false -> element(2, ct:run_test([{spec, Spec}])); \
          true  -> ct_master:run(Spec) \
-   	end, \
-		erlang:halt().
+      end, \
+      erlang:halt(Error).
 
 #####################################################################
 ##
@@ -119,7 +122,7 @@ relx.config: rel/relx.config.src
 	@cat $< | sed 's/release/release, {${APP}, "${VSN}"}/' > $@ 
 else
 ${PKG}.tar.gz: _build/dockermake
-	@docker build --file=$< --force-rm=true	--tag=build/${APP}:latest . ;\
+	@docker build --file=$< --force-rm=true --build-arg="VERSION=${VSN}" --tag=build/${APP}:latest . ;\
 	I=`docker create build/${APP}:latest` ;\
 	docker cp $$I:/${APP}/$@ $@ ;\
 	docker rm -f $$I ;\
@@ -136,7 +139,7 @@ docker: rel/Dockerfile
 		--build-arg APP=${APP} \
 		--build-arg VSN=${VSN} \
 		-t ${URL}/${APP}:${VSN} -f $< .
-	docker tag -f ${URL}/${APP}:${VSN} ${URL}/${APP}:${LATEST}
+	docker tag ${URL}/${APP}:${VSN} ${URL}/${APP}:${LATEST}
 
 
 
@@ -207,8 +210,9 @@ console: ${PKG}.tar.gz
 ##
 #####################################################################
 rebar3:
-	@curl -L -O https://s3.amazonaws.com/rebar3/rebar3 ; \
-	chmod ugo+x $@
+	@echo "==> install rebar (${REBAR})" ;\
+	curl -L -O --progress-bar https://github.com/erlang/rebar3/releases/download/${REBAR}/rebar3 ;\
+	chmod +x $@
 
 .PHONY: test rel deps all pkg 
 

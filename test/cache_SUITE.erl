@@ -42,7 +42,9 @@
    lookup/1,
    has/1,
    remove/1,
-   remove_/1
+   remove_/1,
+   apply/1,
+   apply_/1
 ]).
 
 %%
@@ -77,7 +79,7 @@ groups() ->
       {primitives, [parallel], 
          [lifecycle]},
       {basic_io, [parallel], 
-         [put, put_, get, lookup, has, remove, remove_]},
+         [put, put_, get, lookup, has, remove, remove_, apply, apply_]},
       {extended_io, [parallel], 
          [acc, set, add, replace, append, append_, prepend, prepend_, delete]}
    ].
@@ -168,6 +170,22 @@ remove_(_Config) ->
    ok = cache:remove_(Cache, key),   
    false= cache:has(Cache, key),
    ok = cache:drop(Cache).
+
+apply(_Config) ->
+   {ok, Cache} = cache:start_link([]),
+   val = cache:apply(Cache, key, fun(undefined) -> val end),
+   val = cache:get(Cache, key),
+   lav = cache:apply(Cache, key, fun(val) -> lav end),
+   lav = cache:get(Cache, key),
+   ok = cache:drop(Cache).   
+
+apply_(_Config) ->
+   {ok, Cache} = cache:start_link([]),
+   cache:apply_(Cache, key, fun(undefined) -> val end),
+   val = cache:get(Cache, key),
+   cache:apply_(Cache, key, fun(val) -> lav end),
+   lav = cache:get(Cache, key),
+   ok = cache:drop(Cache).   
 
 %%%----------------------------------------------------------------------------   
 %%%
