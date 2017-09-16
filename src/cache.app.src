@@ -9,6 +9,10 @@
          stdlib
       ]},
       {mod, {cache_app, []}},
-      {env, []}
+      {env, []},
+
+      {licenses, ["Apache"]},
+      {maintainers, ["Dmitry Kolesnikov"]},
+      {links, [{"GitHub", "https://github.com/fogfish/cache"}]}
    ]
 }.  
