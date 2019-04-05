@@ -13,3 +13,5 @@ tests/
 rebar3
 _build/
 *.sublime-*
+*.iml
+.idea
