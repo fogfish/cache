@@ -154,6 +154,29 @@ The local cache instance is accessible for any Erlang nodes in the cluster.
 ```
 
 
+### sharding
+
+Module `sharded_cache` provides simple sharding on top of `cache`. It uses simple `hash(Key) rem NumShards` approach, and keeps `NumShards` in application environment.
+
+```erlang
+   > MySup = cache_sup.
+   > sharded_cache:init(my_cache, 8, MySup).
+   > sharded_cache:put(my_cache, key1, "Hello").
+   > sharded_cache:get(my_cache, key1).
+   {ok,"Hello"}
+```
+
+You need to provide supervisor for shards.
+
+`sharded_cache` uses only small subset of `cache` API. But you can get shard name for your key and then use `cache` directly.
+```erlang
+   > {ok, Shard} = sharded_cache:get_shard(my_cache, key1)
+   {ok,my_cache_2}
+   > cache:lookup(Shard, key1).
+   "Hello"
+```
+
+
 ## How to Contribute
 
 The library is Apache 2.0 licensed and accepts contributions via GitHub pull requests.

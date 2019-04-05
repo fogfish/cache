@@ -46,7 +46,7 @@ init([]) ->
     {ok,
       {
          {one_for_one, 4, 1800},
-         [?CHILD(worker, Name, cache, [Name, Opts]) || {Name, Opts} <- default_cache()]
+         [?CHILD(worker, Name, cache, [Name, Opts]) || {Name, Opts} <- default_cache(), Name /= cache_shards]
       }
    }.
 
