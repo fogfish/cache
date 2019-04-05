@@ -6,12 +6,16 @@
     get_shard/2, get_shard/3,
     get/2, get/3,
     put/3, put/4,
-    delete/2, delete/3
+    delete/2, delete/3,
+    get_stat/1, get_stat/2
 ]).
+
+-export_type([stat/0]).
 
 -define(default_app, cache).
 -define(app_env_key, cache_shards).
 
+-type stat() :: #{atom() => integer()}.
 
 %% Public API
 
@@ -116,6 +120,26 @@ delete(Name, Key, Application) ->
     end.
 
 
+%% Return map #{size => S, memory => N} which aggregates data from all shard and segments.
+%% *size* is a number of objects in all ets tables.
+%% *memory* is a memory in bytes allocated for all ets tables.
+
+-spec get_stat(atom()) -> {ok, stat()} | {error, invalid_cache}.
+get_stat(Name) ->
+    get_stat(Name, ?default_app).
+
+
+-spec get_stat(atom(), atom()) -> {ok, stat()} | {error, invalid_cache}.
+get_stat(Name, Application) ->
+    CacheShards = application:get_env(Application, ?app_env_key, #{}),
+    case maps:find(Name, CacheShards) of
+        {ok, NumShards} ->
+            Info = do_get_stat(Name, NumShards),
+            {ok, Info};
+        error -> {error, invalid_cache}
+    end.
+
+
 
 %% Inner functions
 
@@ -165,3 +189,20 @@ stop_shard(ShardName, Sup) ->
     supervisor:terminate_child(Sup, ShardName).
 
 
+-spec do_get_stat(atom(), pos_integer()) -> stat().
+do_get_stat(Name, NumShards) ->
+    WordSize = erlang:system_info(wordsize),
+    lists:foldl(
+        fun(ID, #{size := Size, memory := Memory} = Acc) ->
+            ShardName = make_shard_name(Name, ID),
+            Info = cache:i(ShardName),
+            SegmentSizes = proplists:get_value(size, Info),
+            SegmentMemory = proplists:get_value(memory, Info),
+            Acc#{
+                size => Size + lists:sum(SegmentSizes),
+                memory => Memory + lists:sum(SegmentMemory) * WordSize
+            }
+        end,
+        #{size => 0, memory => 0},
+        lists:seq(1, NumShards)
+    ).
