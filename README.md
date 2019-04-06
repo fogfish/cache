@@ -1,9 +1,9 @@
 # Segmented in-memory cache
 
 [![Build Status](https://secure.travis-ci.org/fogfish/cache.svg?branch=master)](http://travis-ci.org/fogfish/cache)
+[![Coverage Status](https://coveralls.io/repos/github/fogfish/cache/badge.svg?branch=master)](https://coveralls.io/github/fogfish/cache?branch=master) 
 [![Hex.pm](https://img.shields.io/hexpm/v/cache.svg)](https://hex.pm/packages/cache)
-[![Analytics](https://ga-beacon.appspot.com/UA-78986123-1/cache?flat)](https://github.com/fogfish/cache)
-
+[![Hex Downloads](https://img.shields.io/hexpm/dt/cache.svg)](https://hex.pm/packages/cache)
 
 ## Inspiration
 
