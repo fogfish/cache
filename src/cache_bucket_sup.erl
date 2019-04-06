@@ -43,14 +43,20 @@ start_link() ->
 %% ===================================================================
 
 init([]) ->
-    {ok,
+   {ok,
       {
          {one_for_one, 4, 1800},
-         [?CHILD(worker, Name, cache, [Name, Opts]) || {Name, Opts} <- default_cache(), Name /= cache_shards]
+         [?CHILD(worker, Name, cache, [Name, Opts]) || {Name, Opts} <- default_cache()]
       }
    }.
 
 %%
 %% list of default cache specification
+%% Note, following keys are reserved
+%%   * included_applications
+%%   * cache_shards
 default_cache() ->
-   proplists:delete(included_applications, application:get_all_env()).
+   [Env || {Name, _} = Env <- application:get_all_env(),
+      Name /= included_applications,
+      Name /= cache_shards
+   ].

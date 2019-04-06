@@ -40,7 +40,7 @@ The library exposes public interfaces through exports of modules:
 * [`sharded_cache.erl`](src/sharded_cache.erl)
 
 
-Build library and run the development console to evaluate Key features
+Build library and run the development console to evaluate key features
 
 ```
 make && make run
@@ -49,15 +49,16 @@ make && make run
 
 ## Key features
 
-* Key/value interface to read/write cache elements
-* Primitive in-storage transform interface (accumulators, lists, binaries)
-* Check-and-store
-* Asynchronous I/O
-* Single node sharding
+* Key/value interface to read/write cached entities
+* Naive transform interface (accumulators, lists, binaries) to modify entities in-place
+* Check-and-store of put behavior
+* Supports asynchronous I/O to cache buckets
+* Sharding of cache bucket
+
 
 ### key/value interface
 
-The library implements traditional key/value interface through `put`, `get` and `remove` notation.
+The library implements traditional key/value interface through `put`, `get` and `remove` functions.
 
 ```erlang
    application:start(cache).
@@ -70,7 +71,7 @@ The library implements traditional key/value interface through `put`, `get` and 
 
 ### asynchronous i/o
 
-The library implements synchronous and asynchronous implementation of same functions. The asynchronous variant of function is annotated with `_` suffix. E.g. `get(...)` is a synchronous cache lookup operation (the process is blocked until cache returns); `get_(...)` is an asynchronous variant that delivers result of execution to mailbox of the process.
+The library provides synchronous and asynchronous implementation of same functions. The asynchronous variant of function is annotated with `_` suffix. E.g. `get(...)` is a synchronous cache lookup operation (the process is blocked until cache returns); `get_(...)` is an asynchronous variant that delivers result of execution to mailbox.
 
 ```erlang
    application:start(cache).
@@ -82,7 +83,7 @@ The library implements synchronous and asynchronous implementation of same funct
 
 ### transform element
 
-The library allows to apply an function over the cache element.
+The library allows to read-and-modify (modify in-place) cached element. You can `apply` any function over cached elements.
 
 ```erlang
    application:start(cache).
@@ -93,7 +94,7 @@ The library allows to apply an function over the cache element.
    cache:get(my_cache, <<"my key">>).
 ```
 
-The library implement to helper functions to transform elements with `append` or `prepend`
+The library implement helper functions to transform elements with `append` or `prepend`.
 
 ```erlang
    application:start(cache).
@@ -169,14 +170,10 @@ The local cache instance is accessible for any Erlang nodes in the cluster.
 Module `sharded_cache` provides simple sharding on top of `cache`. It uses simple `hash(Key) rem NumShards` approach, and keeps `NumShards` in application environment.
 
 ```erlang
-   > MySup = cache_sup.
-   > sharded_cache:init(my_cache, 8, MySup).
-   > sharded_cache:put(my_cache, key1, "Hello").
-   > sharded_cache:get(my_cache, key1).
-   {ok,"Hello"}
+   {ok, _} = sharded_cache:start_link(my_cache, 8, [{n, 10}, {ttl, 60}]).
+   ok = sharded_cache:put(my_cache, key1, "Hello").
+   {ok,"Hello"} = sharded_cache:get(my_cache, key1).
 ```
-
-You need to provide supervisor for shards.
 
 `sharded_cache` uses only small subset of `cache` API. But you can get shard name for your key and then use `cache` directly.
 ```erlang
@@ -223,7 +220,7 @@ If you detect a bug, please bring it to our attention via GitHub issues. Please 
 
 ## Changelog
 
-* 2.3.0 - single node sharding
+* 2.3.0 - sharding of cache bucket (single node only)
 * 2.0.0 - various changes on asynchronous api, not compatible with version 1.x 
 * 1.0.1 - production release
 
