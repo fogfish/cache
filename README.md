@@ -1,4 +1,6 @@
-# Segmented in-memory cache
+# Cache
+
+Library implements segmented in-memory cache.
 
 [![Build Status](https://secure.travis-ci.org/fogfish/cache.svg?branch=master)](http://travis-ci.org/fogfish/cache)
 [![Coverage Status](https://coveralls.io/repos/github/fogfish/cache/badge.svg?branch=master)](https://coveralls.io/github/fogfish/cache?branch=master) 
@@ -33,7 +35,10 @@ If you are using `rebar3` you can include the library in your project with
 
 ### Usage
 
-The library exposes public interface through exports of [`cache.erl`](src/cache.erl) module.
+The library exposes public interfaces through exports of modules:
+* [`cache.erl`](src/cache.erl)
+* [`sharded_cache.erl`](src/sharded_cache.erl)
+
 
 Build library and run the development console to evaluate Key features
 
@@ -44,6 +49,11 @@ make && make run
 
 ## Key features
 
+* Key/value interface to read/write cache elements
+* Primitive in-storage transform interface (accumulators, lists, binaries)
+* Check-and-store
+* Asynchronous I/O
+* Single node sharding
 
 ### key/value interface
 
@@ -211,14 +221,16 @@ If you detect a bug, please bring it to our attention via GitHub issues. Please 
 - briefly summarize the steps you took to resolve or reproduce the problem
 
 
-## Change log
+## Changelog
 
+* 2.3.0 - single node sharding
 * 2.0.0 - various changes on asynchronous api, not compatible with version 1.x 
 * 1.0.1 - production release
 
 ## Contributors
 
-* Jose Luis Navarro https://github.com/artefactop
+* [Yuri Zhloba](https://github.com/yzh44yzh) 
+* [Jose Luis Navarro](https://github.com/artefactop)
 * Valentin Micic
 
 
