@@ -166,7 +166,7 @@ The local cache instance is accessible for any Erlang nodes in the cluster.
 
 ### sharding
 
-Module `cache_shards` provides simple sharding on top of `cache`. It uses simple `hash(Key) rem NumShards` approach, and keeps `NumShards` in application environment. The feature is still **experimental**, its interface is a subject to change further releases. 
+Module `cache_shards` provides simple sharding on top of `cache`. It uses simple `hash(Key) rem NumShards` approach, and keeps `NumShards` in application environment. This feature is still **experimental**, its interface is a subject to change in further releases. 
 
 ```erlang
    {ok, _} = cache_shards:start_link(my_cache, 8, [{n, 10}, {ttl, 60}]).
