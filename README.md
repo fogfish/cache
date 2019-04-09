@@ -35,8 +35,8 @@ If you are using `rebar3` you can include the library in your project with
 
 ### Usage
 
-The library exposes public interface through exports of module [`cache.erl`](src/cache.erl).
-An experimental features are available through, Note in later releases they would be incorporated to `cache`
+The library exposes public primary interface through exports of module [`cache.erl`](src/cache.erl).
+An experimental features are available through following interfaces. Please note that further releases of library would promote experimental features to [primary interface](src/cache.erl).
 * [`sharded_cache.erl`](src/cache_shards.erl)
 
 Build library and run the development console to evaluate key features
