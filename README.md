@@ -35,10 +35,9 @@ If you are using `rebar3` you can include the library in your project with
 
 ### Usage
 
-The library exposes public interfaces through exports of modules:
-* [`cache.erl`](src/cache.erl)
-* [`sharded_cache.erl`](src/sharded_cache.erl)
-
+The library exposes public primary interface through exports of module [`cache.erl`](src/cache.erl).
+An experimental features are available through following interfaces. Please note that further releases of library would promote experimental features to [primary interface](src/cache.erl).
+* [`sharded_cache.erl`](src/cache_shards.erl)
 
 Build library and run the development console to evaluate key features
 
@@ -167,19 +166,19 @@ The local cache instance is accessible for any Erlang nodes in the cluster.
 
 ### sharding
 
-Module `sharded_cache` provides simple sharding on top of `cache`. It uses simple `hash(Key) rem NumShards` approach, and keeps `NumShards` in application environment.
+Module `cache_shards` provides simple sharding on top of `cache`. It uses simple `hash(Key) rem NumShards` approach, and keeps `NumShards` in application environment. This feature is still **experimental**, its interface is a subject to change in further releases. 
 
 ```erlang
-   {ok, _} = sharded_cache:start_link(my_cache, 8, [{n, 10}, {ttl, 60}]).
-   ok = sharded_cache:put(my_cache, key1, "Hello").
-   {ok,"Hello"} = sharded_cache:get(my_cache, key1).
+   {ok, _} = cache_shards:start_link(my_cache, 8, [{n, 10}, {ttl, 60}]).
+   ok = cache_shards:put(my_cache, key1, "Hello").
+   {ok,"Hello"} = cache_shards:get(my_cache, key1).
 ```
 
 `sharded_cache` uses only small subset of `cache` API. But you can get shard name for your key and then use `cache` directly.
 ```erlang
-   > {ok, Shard} = sharded_cache:get_shard(my_cache, key1)
-   {ok,my_cache_2}
-   > cache:lookup(Shard, key1).
+   {ok, Shard} = cache_shards:get_shard(my_cache, key1)
+   {ok, my_cache_2}
+   cache:lookup(Shard, key1).
    "Hello"
 ```
 
