@@ -82,6 +82,7 @@ init([], Opts, State) ->
    Evict= cache_util:mmul(cache_util:mdiv(TTL,  State#cache.n), 1000),
    Heap = cache_heap:new(
       Type
+     ,State#cache.n
      ,cache_util:mdiv(TTL,  State#cache.n)
      ,cache_util:mdiv(Size, State#cache.n)
      ,cache_util:mdiv(cache_util:mdiv(Mem,  State#cache.n), erlang:system_info(wordsize))

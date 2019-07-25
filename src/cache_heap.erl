@@ -18,7 +18,7 @@
 -module(cache_heap).
 
 -export([
-   new/4
+   new/5
 ,  size/1
 ,  head/1
 ,  tail/1
@@ -31,6 +31,7 @@
 %%
 -record(heap, {
    type        = set       :: atom()       %% type of segment
+,  n           = undefined :: integer()    %% number of segments
 ,  ttl         = undefined :: integer()    %% segment expire time
 ,  cardinality = undefined :: integer()    %% segment cardinality quota
 ,  memory      = undefined :: integer()    %% segment memory quota
@@ -39,11 +40,12 @@
 
 %%
 %% create new empty heap
--spec(new(atom(), integer(), integer(), integer()) -> #heap{}).
+-spec new(atom(), integer(), integer(), integer(), integer()) -> #heap{}.
 
-new(Type, TTL, Cardinality, Memory) ->
+new(Type, N, TTL, Cardinality, Memory) ->
    init(#heap{
       type        = Type
+   ,  n           = N
    ,  ttl         = TTL
    ,  cardinality = Cardinality
    ,  memory      = Memory
