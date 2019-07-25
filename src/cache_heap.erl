@@ -19,13 +19,13 @@
 
 -export([
    new/4
-  ,size/1
-  ,head/1
-  ,tail/1
-  ,refs/1
-  ,slip/1
-  ,drop/2
-  ,purge/2
+,  size/1
+,  head/1
+,  tail/1
+,  refs/1
+,  slip/1
+,  drop/2
+,  purge/2
 ]).   
 
 %%
@@ -45,9 +45,9 @@
 new(Type, TTL, Cardinality, Memory) ->
    init(#heap{
       type        = Type
-     ,ttl         = TTL
-     ,cardinality = Cardinality
-     ,memory      = Memory
+   ,  ttl         = TTL
+   ,  cardinality = Cardinality
+   ,  memory      = Memory
    }).
 
 %%
