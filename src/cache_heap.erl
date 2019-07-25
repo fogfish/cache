@@ -29,13 +29,12 @@
 ]).   
 
 %%
-%% heap
 -record(heap, {
-   type        = set       :: atom(),      %% type of segment
-   ttl         = undefined :: integer(),   %% segment expire time
-   cardinality = undefined :: integer(),   %% segment cardinality quota
-   memory      = undefined :: integer(),   %% segment memory quota
-   segments    = []        :: [integer()]  %% segment references 
+   type        = set       :: atom()       %% type of segment
+,  ttl         = undefined :: integer()    %% segment expire time
+,  cardinality = undefined :: integer()    %% segment cardinality quota
+,  memory      = undefined :: integer()    %% segment memory quota
+,  segments    = []        :: [integer()]  %% segment references 
 }).
 
 %%
