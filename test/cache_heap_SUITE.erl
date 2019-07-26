@@ -43,32 +43,6 @@ heap_init(_) ->
    Expect = lists:seq(6, 60, 6),
    Expect = [Expire || {Expire, _} <- queue:to_list(Segments)].
 
-% %%
-% heap_size(_) ->
-%    Heap = cache_heap:new(set, 10, 60, 1000, 102400),
-%    10   = cache_heap:size(Heap).
-
-% %%
-% heap_heap(_) ->
-%    meck:new(cache_util, [passthrough]),
-%    meck:expect(cache_util, now, fun() -> 0 end),
-
-%    Heap = cache_heap:new(set, 10, 60, 1000, 102400),
-%    {6, _} = cache_heap:head(Heap),
-
-%    meck:unload(cache_util).
-
-% %%
-% heap_tail(_) ->
-%    meck:new(cache_util, [passthrough]),
-%    meck:expect(cache_util, now, fun() -> 0 end),
-
-%    Heap = cache_heap:new(set, 10, 60, 1000, 102400),
-%    Tail = cache_heap:tail(Heap),
-%    Expect = lists:seq(12, 60, 6),
-%    Expect = [Expire || {Expire, _} <- Tail],
-
-%    meck:unload(cache_util).
 
 %%
 heap_purge(_) ->
