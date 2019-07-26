@@ -18,91 +18,16 @@
 
 %%
 %% common test
--export([
-   all/0
-  ,groups/0
-  ,init_per_suite/1
-  ,end_per_suite/1
-  ,init_per_group/2
-  ,end_per_group/2
-]).
+-export([all/0]).
+-compile(export_all).
 
-%%
-%% primitives
--export([
-   lifecycle/1
-]).
-
-%%
-%% cache basic i/o
--export([
-   put/1,
-   put_/1,
-   get/1,
-   lookup/1,
-   has/1,
-   remove/1,
-   remove_/1,
-   apply/1,
-   apply_/1
-]).
-
-%%
-%% cache extended i/o
--export([
-   acc/1,
-   set/1,
-   add/1,
-   replace/1,
-   append/1,
-   append_/1,
-   prepend/1,
-   prepend_/1,
-   delete/1
-]).
-
-
-%%%----------------------------------------------------------------------------   
-%%%
-%%% suite
-%%%
-%%%----------------------------------------------------------------------------   
 all() ->
-   [
-      {group, primitives},
-      {group, basic_io},
-      {group, extended_io}
+   [Test || {Test, NAry} <- ?MODULE:module_info(exports), 
+      Test =/= module_info,
+      Test =/= init_per_suite,
+      Test =/= end_per_suite,
+      NAry =:= 1
    ].
-
-groups() ->
-   [
-      {primitives, [parallel], 
-         [lifecycle]},
-      {basic_io, [parallel], 
-         [put, put_, get, lookup, has, remove, remove_, apply, apply_]},
-      {extended_io, [parallel], 
-         [acc, set, add, replace, append, append_, prepend, prepend_, delete]}
-   ].
-
-
-%%%----------------------------------------------------------------------------   
-%%%
-%%% init
-%%%
-%%%----------------------------------------------------------------------------   
-init_per_suite(Config) ->
-   Config.
-
-end_per_suite(_Config) ->
-   ok.
-
-%% 
-%%
-init_per_group(_, Config) ->
-   Config.
-
-end_per_group(_, _Config) ->
-   ok.
 
 %%%----------------------------------------------------------------------------   
 %%%
@@ -112,6 +37,54 @@ end_per_group(_, _Config) ->
 
 lifecycle(_Config) ->
    {ok, Cache} = cache:start_link([]),
+   ok = cache:drop(Cache).
+
+i(_Config) ->
+   {ok, Cache} = cache:start_link([]),
+   Spec = cache:i(Cache),
+   {heap, _} = lists:keyfind(heap, 1, Spec),
+   {expire, _} = lists:keyfind(expire, 1, Spec),
+   {size, _} = lists:keyfind(size, 1, Spec),
+   {memory, _} = lists:keyfind(memory, 1, Spec),
+   ok = cache:drop(Cache).
+
+heap(_Config) ->
+   {ok, Cache} = cache:start_link([]),
+   ok = cache:put(Cache, key, val),
+   [{key, val}] = ets:lookup(cache:heap(Cache, 1), key),
+   ok = cache:drop(Cache).
+
+heap_recover_failure(_Config) ->
+   {ok, Cache} = cache:start_link([]),
+   ok = cache:put(Cache, key, val),
+   cache:heap(Cache, 10000),
+   [{key, val}] = ets:lookup(cache:heap(Cache, 1), key),
+   ok = cache:drop(Cache).
+
+purge(_Config) ->
+   {ok, Cache} = cache:start_link([]),
+   ok  = cache:put(Cache, key, val),
+   val = cache:get(Cache, key),
+   cache:purge(Cache),
+   undefined = cache:get(Cache, key),
+   ok = cache:drop(Cache).
+
+evict_ttl(_Config) ->
+   {ok, Cache} = cache:start_link([{n, 10}, {ttl, 10}]),
+   ok = cache:put(Cache, key, val, 3),
+   timer:sleep(1200),
+   val = cache:lookup(Cache, key),
+   timer:sleep(2200),
+   undefined = cache:lookup(Cache, key),
+   ok = cache:drop(Cache).
+
+evict_no_ttl(_Config) ->
+   {ok, Cache} = cache:start_link([{n, 3}, {ttl, 3}]),
+   ok = cache:put(Cache, key, val),
+   timer:sleep(1200),
+   val = cache:lookup(Cache, key),
+   timer:sleep(2200),
+   undefined = cache:lookup(Cache, key),
    ok = cache:drop(Cache).
 
 
@@ -135,9 +108,11 @@ put_(_Config) ->
 
 
 get(_Config) ->
-   {ok, Cache} = cache:start_link([]),
-   ok  = cache:put(Cache, key, val),
-   val = cache:get(Cache, key),
+   {ok, Cache} = cache:start_link([{n, 10}, {ttl, 10}]),
+   ok  = cache:put(Cache, key1, val),
+   val = cache:get(Cache, key1),
+   ok  = cache:put(Cache, key2, val, 5),
+   val = cache:get(Cache, key2),
    undefined = cache:get(Cache, unknown),
    ok = cache:drop(Cache).
       
@@ -153,6 +128,15 @@ has(_Config) ->
    ok = cache:put(Cache, key, val),
    true  = cache:has(Cache, key),
    false = cache:has(Cache, unknown),
+   ok = cache:drop(Cache).
+
+ttl(_Config) ->
+   {ok, Cache} = cache:start_link([{n,10}, {ttl, 60}]),
+   ok = cache:put(Cache, key1, val),
+   true = cache:ttl(Cache, key1) > 55,
+   ok = cache:put(Cache, key2, val, 10),
+   true = cache:ttl(Cache, key2) > 9,
+   undefined = cache:ttl(Cache, unknown),
    ok = cache:drop(Cache).
 
 remove(_Config) ->
@@ -200,6 +184,13 @@ acc(_Config) ->
    11 = cache:acc(Cache, key, 1),
    ok = cache:drop(Cache).
 
+acc_(_Config) ->
+   {ok, Cache} = cache:start_link([]),
+   cache:acc_(Cache, key, 1),
+   cache:acc_(Cache, key, 10),
+   11 = cache:get(Cache, key),
+   ok = cache:drop(Cache).
+
 set(_Config) ->
    {ok, Cache} = cache:start_link([]),
    ok  = cache:set(Cache, key, val),
@@ -212,13 +203,29 @@ add(_Config) ->
    {error, conflict}  = cache:add(Cache, key, val),
    ok  = cache:drop(Cache).
 
+add_(_Config) ->
+   {ok, Cache} = cache:start_link([]),
+   cache:add_(Cache, key, val),
+   cache:add_(Cache, key, non),
+   val = cache:get(Cache, key),
+   ok  = cache:drop(Cache).
+
 replace(_Config) ->
    {ok, Cache} = cache:start_link([]),
    {error, not_found} = cache:replace(Cache, key, val),
    ok  = cache:set(Cache, key, val),
    ok  = cache:replace(Cache, key, val),
    ok  = cache:drop(Cache).
-   
+
+replace_(_Config) ->
+   {ok, Cache} = cache:start_link([]),
+   cache:replace_(Cache, key, non),
+   undefined = cache:get(Cache, key),
+   ok  = cache:set(Cache, key, val),
+   cache:replace_(Cache, key, foo),
+   foo = cache:get(Cache, key),
+   ok  = cache:drop(Cache).
+
 append(_Config) ->
    {ok, Cache} = cache:start_link([]),
    ok  = cache:append(Cache, key, a),
