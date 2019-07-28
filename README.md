@@ -11,20 +11,26 @@ Library implements segmented in-memory cache.
 
 Cache uses N disposable ETS tables instead of single one. The cache applies eviction and quota
 policies at segment level. The oldest ETS table is destroyed and new one is created when 
-quota or TTL criteria are exceeded. This approach outperforms the traditional timestamp indexing techniques.    
+quota or TTL criteria are exceeded. This approach outperforms the traditional timestamp indexing techniques.
 
 The write operation always uses youngest segment. The read operation lookup key from youngest to oldest table until it is found same time key is moved to youngest segment to prolong TTL. If none of ETS table contains key then cache-miss occurs. 
 
 The downside is inability to assign precise TTL per single cache entry. TTL is always approximated to nearest segment. (e.g. cache with 60 sec TTL and 10 segments has 6 sec accuracy on TTL) 
+
+## Key features
+
+* Key/value interface to read/write cached entities
+* Naive transform interface (accumulators, lists, binaries) to modify entities in-place
+* Check-and-store of put behavior
+* Supports asynchronous I/O to cache buckets
+* Sharding of cache bucket
 
 
 ## Getting started
 
 The latest version of the library is available at its `master` branch. All development, including new features and bug fixes, take place on the `master` branch using forking and pull requests as described in contribution guidelines.
 
-### Installation
-
-If you are using `rebar3` you can include the library in your project with
+The stable library release is available via hex packages, add the library as dependency to `rebar.config`
 
 ```erlang
 {deps, [
@@ -36,7 +42,7 @@ If you are using `rebar3` you can include the library in your project with
 ### Usage
 
 The library exposes public primary interface through exports of module [`cache.erl`](src/cache.erl).
-An experimental features are available through following interfaces. Please note that further releases of library would promote experimental features to [primary interface](src/cache.erl).
+An experimental features are available through interface extensions. Please note that further releases of library would promote experimental features to [primary interface](src/cache.erl).
 * [`sharded_cache.erl`](src/cache_shards.erl)
 
 Build library and run the development console to evaluate key features
@@ -45,19 +51,23 @@ Build library and run the development console to evaluate key features
 make && make run
 ```
 
+### spawn and configure
 
-## Key features
-
-* Key/value interface to read/write cached entities
-* Naive transform interface (accumulators, lists, binaries) to modify entities in-place
-* Check-and-store of put behavior
-* Supports asynchronous I/O to cache buckets
-* Sharding of cache bucket
+Use `cache:start_link(...)` to spawn an new cache instance. It supports a configuration using property lists:
+* `type` - a type of ETS table to used as segment, default is `set`. See `ets:new/2` documentation for supported values. 
+* `n` - number of cache segments, default is 10.
+* `ttl` - time to live of cached items in seconds, default is 600 seconds. It is recommended to use value multiple to `n`. The oldest cache segment is evicted every `ttl / n` seconds. 
+* `size` - number of items to store in cache. It is recommended to use value multiple to `n`, each cache segment takes about `size / n` items. The size policy is applied only to youngest segment.
+* `memory` - rough number of bytes available for cache items. Each cache segment is allowed to take about `memory / n` bytes. Note: policy enforcement accounts Erlang word size.
+* `policy` - cache eviction policy, default is `lru`, supported values are Least Recently Used `lru`, Most Recently Used `mru`.
+* `check` - time in seconds to enforce cache policy. The default behavior enforces policy every `ttl / n` seconds. This timeout helps to optimize size/memory policy enforcement at high throughput system. The timeout is disabled by default. 
+* `stats` - cache statistics handler either function/2 or `{M, F}` struct.
+* `heir` - the ownership of ETS segment is given away to the process during segment eviction. See `ets:give_away/3` for details.  
 
 
 ### key/value interface
 
-The library implements traditional key/value interface through `put`, `get` and `remove` functions.
+The library implements traditional key/value interface through `put`, `get` and `remove` functions. The function `get` prolongs ttl of the item, use `lookup` to keep ttl untouched.
 
 ```erlang
    application:start(cache).
@@ -187,11 +197,14 @@ Module `cache_shards` provides simple sharding on top of `cache`. It uses simple
 
 The library is Apache 2.0 licensed and accepts contributions via GitHub pull requests.
 
-### getting started
+1. Fork it
+2. Create your feature branch (`git checkout -b my-new-feature`)
+3. Commit your changes (`git commit -am 'Added some feature'`)
+4. Push to the branch (`git push origin my-new-feature`)
+5. Create new Pull Request
 
-* Fork the repository on GitHub
-* Read the README.md for build instructions
-* Make pull request
+The development requires [Erlang/OTP](http://www.erlang.org/downloads) version 19.0 or later and essential build tools.
+
 
 ### commit message
 
