@@ -70,11 +70,11 @@ Use `cache:start_link(...)` to spawn an new cache instance. It supports a config
 The library implements traditional key/value interface through `put`, `get` and `remove` functions. The function `get` prolongs ttl of the item, use `lookup` to keep ttl untouched.
 
 ```erlang
-   application:start(cache).
-   {ok, _} = cache:start_link(my_cache, [{n, 10}, {ttl, 60}]).
-   
-   ok  = cache:put(my_cache, <<"my key">>, <<"my value">>).
-   Val = cache:get(my_cache, <<"my key">>).
+application:start(cache).
+{ok, _} = cache:start_link(my_cache, [{n, 10}, {ttl, 60}]).
+
+ok  = cache:put(my_cache, <<"my key">>, <<"my value">>).
+Val = cache:get(my_cache, <<"my key">>).
 ```
 
 
@@ -83,11 +83,11 @@ The library implements traditional key/value interface through `put`, `get` and 
 The library provides synchronous and asynchronous implementation of same functions. The asynchronous variant of function is annotated with `_` suffix. E.g. `get(...)` is a synchronous cache lookup operation (the process is blocked until cache returns); `get_(...)` is an asynchronous variant that delivers result of execution to mailbox.
 
 ```erlang
-   application:start(cache).
-   {ok, _} = cache:start_link(my_cache, [{n, 10}, {ttl, 60}]).
+application:start(cache).
+{ok, _} = cache:start_link(my_cache, [{n, 10}, {ttl, 60}]).
 
-   Ref = cache:get_(my_cache, <<"my key">>).
-   receive {Ref, Val} -> Val end.
+Ref = cache:get_(my_cache, <<"my key">>).
+receive {Ref, Val} -> Val end.
 ```
 
 ### transform element
@@ -95,35 +95,35 @@ The library provides synchronous and asynchronous implementation of same functio
 The library allows to read-and-modify (modify in-place) cached element. You can `apply` any function over cached elements.
 
 ```erlang
-   application:start(cache).
-   {ok, _} = cache:start_link(my_cache, [{n, 10}, {ttl, 60}]).
+application:start(cache).
+{ok, _} = cache:start_link(my_cache, [{n, 10}, {ttl, 60}]).
 
-   cache:put(my_cache, <<"my key">>, <<"x">>).
-   cache:apply(my_cache, <<"my key">>, fun(X) -> <<"x", X/binary>> end).
-   cache:get(my_cache, <<"my key">>).
+cache:put(my_cache, <<"my key">>, <<"x">>).
+cache:apply(my_cache, <<"my key">>, fun(X) -> <<"x", X/binary>> end).
+cache:get(my_cache, <<"my key">>).
 ```
 
 The library implement helper functions to transform elements with `append` or `prepend`.
 
 ```erlang
-   application:start(cache).
-   {ok, _} = cache:start_link(my_cache, [{n, 10}, {ttl, 60}]).
+application:start(cache).
+{ok, _} = cache:start_link(my_cache, [{n, 10}, {ttl, 60}]).
 
-   cache:put(my_cache, <<"my key">>, <<"b">>).
-   cache:append(my_cache, <<"my key">>, <<"c">>).
-   cache:prepend(my_cache, <<"my key">>, <<"a">>).
-   cache:get(my_cache, <<"my key">>).
+cache:put(my_cache, <<"my key">>, <<"b">>).
+cache:append(my_cache, <<"my key">>, <<"c">>).
+cache:prepend(my_cache, <<"my key">>, <<"a">>).
+cache:get(my_cache, <<"my key">>).
 ```
 
 ### accumulator
 
 ```erlang
-   application:start(cache).
-   {ok, _} = cache:start_link(my_cache, [{n, 10}, {ttl, 60}]).
+application:start(cache).
+{ok, _} = cache:start_link(my_cache, [{n, 10}, {ttl, 60}]).
 
-   cache:acc(my_cache, <<"my key">>, 1).
-   cache:acc(my_cache, <<"my key">>, 1).
-   cache:acc(my_cache, <<"my key">>, 1).
+cache:acc(my_cache, <<"my key">>, 1).
+cache:acc(my_cache, <<"my key">>, 1).
+cache:acc(my_cache, <<"my key">>, 1).
 ```
 
 ### check-and-store
@@ -152,25 +152,25 @@ Therefore, frequent read/write of large entries might impact on overall Erlang p
 
 The global cache instance is visible to all Erlang nodes in the cluster.
 ```erlang
-   %% at a@example.com
-   {ok, _} = cache:start_link({global, my_cache}, [{n, 10}, {ttl, 60}]).
-   Val = cache:get({global, my_cache}, <<"my key">>).
-   
-   %% at b@example.com
-   ok  = cache:put({global, my_cache}, <<"my key">>, <<"my value">>).
-   Val = cache:get({global, my_cache}, <<"my key">>).
+%% at a@example.com
+{ok, _} = cache:start_link({global, my_cache}, [{n, 10}, {ttl, 60}]).
+Val = cache:get({global, my_cache}, <<"my key">>).
+
+%% at b@example.com
+ok  = cache:put({global, my_cache}, <<"my key">>, <<"my value">>).
+Val = cache:get({global, my_cache}, <<"my key">>).
 ```
 
 The local cache instance is accessible for any Erlang nodes in the cluster. 
 
 ```erlang
-   %% a@example.com
-   {ok, _} = cache:start_link(my_cache, [{n, 10}, {ttl, 60}]).
-   Val = cache:get(my_cache, <<"my key">>).
-   
-   %% b@example.com
-   ok  = cache:put({my_cache, 'a@example.com'}, <<"my key">>, <<"my value">>).
-   Val = cache:get({my_cache, 'a@example.com'}, <<"my key">>).
+%% a@example.com
+{ok, _} = cache:start_link(my_cache, [{n, 10}, {ttl, 60}]).
+Val = cache:get(my_cache, <<"my key">>).
+
+%% b@example.com
+ok  = cache:put({my_cache, 'a@example.com'}, <<"my key">>, <<"my value">>).
+Val = cache:get({my_cache, 'a@example.com'}, <<"my key">>).
 ```
 
 
@@ -179,17 +179,17 @@ The local cache instance is accessible for any Erlang nodes in the cluster.
 Module `cache_shards` provides simple sharding on top of `cache`. It uses simple `hash(Key) rem NumShards` approach, and keeps `NumShards` in application environment. This feature is still **experimental**, its interface is a subject to change in further releases. 
 
 ```erlang
-   {ok, _} = cache_shards:start_link(my_cache, 8, [{n, 10}, {ttl, 60}]).
-   ok = cache_shards:put(my_cache, key1, "Hello").
-   {ok,"Hello"} = cache_shards:get(my_cache, key1).
+{ok, _} = cache_shards:start_link(my_cache, 8, [{n, 10}, {ttl, 60}]).
+ok = cache_shards:put(my_cache, key1, "Hello").
+{ok,"Hello"} = cache_shards:get(my_cache, key1).
 ```
 
 `sharded_cache` uses only small subset of `cache` API. But you can get shard name for your key and then use `cache` directly.
 ```erlang
-   {ok, Shard} = cache_shards:get_shard(my_cache, key1)
-   {ok, my_cache_2}
-   cache:lookup(Shard, key1).
-   "Hello"
+{ok, Shard} = cache_shards:get_shard(my_cache, key1)
+{ok, my_cache_2}
+cache:lookup(Shard, key1).
+"Hello"
 ```
 
 
