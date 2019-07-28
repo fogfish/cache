@@ -139,7 +139,7 @@ The cache instances are configurable via `sys.config`. Theses cache instances ar
 
 ```erlang
 {cache, [
-	{my_cache, [{n, 10}, {ttl, 60}]}
+   {my_cache, [{n, 10}, {ttl, 60}]}
 ]}
 ```
 
@@ -164,7 +164,7 @@ The global cache instance is visible to all Erlang nodes in the cluster.
 The local cache instance is accessible for any Erlang nodes in the cluster. 
 
 ```erlang
-	%% a@example.com
+   %% a@example.com
    {ok, _} = cache:start_link(my_cache, [{n, 10}, {ttl, 60}]).
    Val = cache:get(my_cache, <<"my key">>).
    
