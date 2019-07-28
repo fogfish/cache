@@ -69,7 +69,7 @@ init(#heap{type = Type, n = N, ttl = TTL} = Heap) ->
 -spec refs(#heap{}) -> [segment()].
 
 refs(#heap{segments = Segments}) ->
-   queue:to_list(Segments).
+   lists:reverse(queue:to_list(Segments)).
 
 %%
 %% split heap to writable segment and others
@@ -123,15 +123,31 @@ slip(Heir, #heap{} = Heap) ->
          }
    end.
 
-is_expired(Time, #heap{cardinality = Card, memory = Mem, segments = Segments}) ->
-   {Expire, Ref} = queue:head(Segments),
+is_expired(Time, Heap) ->
+   case is_expired_tail(Time, Heap) of
+      false  ->
+         is_expired_head(Heap);
+      Return ->
+         Return
+   end.
+
+is_expired_tail(Time, #heap{segments = Segments}) ->
+   {Expire, _} = queue:head(Segments),
+   case Time >= Expire of
+      true ->
+         ttl;
+      false ->
+         false
+   end.
+
+is_expired_head(#heap{cardinality = Card, memory = Mem, segments = Segments}) ->
+   {_, Ref} = queue:last(Segments),
    case 
-      {Time >= Expire, ets:info(Ref, size) >= Card, ets:info(Ref, memory) >= Mem}
+      {ets:info(Ref, size) >= Card, ets:info(Ref, memory) >= Mem}
    of
-      {true, _, _} -> ttl;
-      {_, true, _} -> ooc;
-      {_, _, true} -> oom;
-      _            -> false
+      {true, _} -> ooc;
+      {_, true} -> oom;
+      _         -> false
    end.
 
 heap_create_segment(#heap{type = Type, ttl = TTL, segments = Segments} = Heap) ->

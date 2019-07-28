@@ -85,6 +85,14 @@ evict_no_ttl(_Config) ->
    undefined = cache:lookup(Cache, key),
    ok = cache:drop(Cache).
 
+evict_ooc(_Config) ->
+   {ok, Cache} = cache:start_link([{n, 10}, {size, 20}, {check, 1}]),
+   ok = cache:put(Cache, key1, val),
+   ok = cache:put(Cache, key2, val),
+   [2 | _] = cache:i(Cache, size),
+   timer:sleep(1200),
+   [0, 2 | _] = cache:i(Cache, size),
+   ok = cache:drop(Cache).
 
 %%%----------------------------------------------------------------------------   
 %%%

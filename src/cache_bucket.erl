@@ -148,7 +148,7 @@ handle_call(i, _, State) ->
 
 handle_call({heap, N}, _, State) ->
    try
-      {_, Ref} = lists:nth(N, lists:reverse(cache_heap:refs(State#cache.heap))),
+      {_, Ref} = lists:nth(N, cache_heap:refs(State#cache.heap)),
       {reply, Ref, State}
    catch _:_ ->
       {reply, badarg, State}
