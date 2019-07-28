@@ -36,7 +36,6 @@
 -record(cache, {
    name   = undefined         :: atom()     %% name of cache bucket
   ,heap   = undefined         :: list()     %% cache heap segments
-  ,n      = ?DEF_CACHE_N      :: integer()  %% number of segments
   ,policy = ?DEF_CACHE_POLICY :: atom()     %% eviction policy
   ,check  = ?DEF_CACHE_CHECK  :: integer()  %% status check timeout
   ,evict  = undefined         :: integer()  %% evict timeout
@@ -64,8 +63,6 @@ init([Name, Opts]) ->
 
 init([{policy, X} | Tail], Opts, State) ->
    init(Tail, Opts, State#cache{policy=X});
-init([{n,      X} | Tail], Opts, State) ->
-   init(Tail, Opts, State#cache{n=X});
 init([{check,  X} | Tail], Opts, State) ->
    init(Tail, Opts, State#cache{check=X * 1000});
 init([{stats,  X} | Tail], Opts, State) ->
@@ -74,7 +71,8 @@ init([{heir,   X} | Tail], Opts, State) ->
    init(Tail, Opts, State#cache{heir=X});
 init([_ | Tail], Opts, State) ->
    init(Tail, Opts, State);
-init([], Opts, #cache{n = N, check = Check} = State) ->
+init([], Opts, #cache{check = Check} = State) ->
+   N    = proplists:get_value(n,      Opts, ?DEF_CACHE_N),
    Type = proplists:get_value(type,   Opts, ?DEF_CACHE_TYPE),
    TTL  = proplists:get_value(ttl,    Opts, ?DEF_CACHE_TTL),
    Size = proplists:get_value(size,   Opts),
@@ -463,8 +461,8 @@ heap_lookup(_Key, []) ->
 %%
 heap_has(Key, {_, Heap} = X, Tail) ->
    case ets:lookup(Heap, Key) of
-      []         -> heap_has(Key, Tail);
-      [{_, Val}] -> X
+      []       -> heap_has(Key, Tail);
+      [{_, _}] -> X
    end.
 
 heap_has(Key, {Tail, Head}) ->

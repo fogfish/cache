@@ -16,10 +16,8 @@
 -module(cache_SUITE).
 -include_lib("common_test/include/ct.hrl").
 
-%%
-%% common test
--export([all/0]).
 -compile(export_all).
+-compile(nowarn_export_all).
 
 all() ->
    [Test || {Test, NAry} <- ?MODULE:module_info(exports), 

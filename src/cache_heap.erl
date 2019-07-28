@@ -101,7 +101,7 @@ split(Expire, #heap{segments = {Tail, Head}} = Heap) ->
             {A, [Segment | B]} -> 
                {Segment, {Tail, A ++ B}}
          end;
-      {[], B} ->
+      {[], _} ->
          split(Heap);
       {A,  B} ->
          [Segment | Ax] = lists:reverse(A),
