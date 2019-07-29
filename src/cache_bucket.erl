@@ -36,8 +36,7 @@
 -record(cache, {
    name   = undefined         :: atom()     %% name of cache bucket
   ,heap   = undefined         :: list()     %% cache heap segments
-  ,n      = ?DEF_CACHE_N      :: integer()  %% number of segments
-  ,policy = ?DEF_CACHE_POLICY :: integer()  %% eviction policy
+  ,policy = ?DEF_CACHE_POLICY :: atom()     %% eviction policy
   ,check  = ?DEF_CACHE_CHECK  :: integer()  %% status check timeout
   ,evict  = undefined         :: integer()  %% evict timeout
   ,stats  = undefined         :: any()      %% stats aggregation functor 
@@ -64,8 +63,6 @@ init([Name, Opts]) ->
 
 init([{policy, X} | Tail], Opts, State) ->
    init(Tail, Opts, State#cache{policy=X});
-init([{n,      X} | Tail], Opts, State) ->
-   init(Tail, Opts, State#cache{n=X});
 init([{check,  X} | Tail], Opts, State) ->
    init(Tail, Opts, State#cache{check=X * 1000});
 init([{stats,  X} | Tail], Opts, State) ->
@@ -74,26 +71,22 @@ init([{heir,   X} | Tail], Opts, State) ->
    init(Tail, Opts, State#cache{heir=X});
 init([_ | Tail], Opts, State) ->
    init(Tail, Opts, State);
-init([], Opts, State) ->
+init([], Opts, #cache{check = Check} = State) ->
+   N    = proplists:get_value(n,      Opts, ?DEF_CACHE_N),
    Type = proplists:get_value(type,   Opts, ?DEF_CACHE_TYPE),
    TTL  = proplists:get_value(ttl,    Opts, ?DEF_CACHE_TTL),
    Size = proplists:get_value(size,   Opts),
    Mem  = proplists:get_value(memory, Opts),
-   Evict= cache_util:mmul(cache_util:mdiv(TTL,  State#cache.n), 1000),
-   Heap = cache_heap:new(
-      Type
-     ,cache_util:mdiv(TTL,  State#cache.n)
-     ,cache_util:mdiv(Size, State#cache.n)
-     ,cache_util:mdiv(cache_util:mdiv(Mem,  State#cache.n), erlang:system_info(wordsize))
-   ),
-   (catch erlang:send_after(State#cache.check, self(), check_heap)),
+   Evict= cache_util:mmul(cache_util:mdiv(TTL,  N), 1000),
+   Heap = cache_heap:new(Type, N, TTL, Size, Mem),
+   (catch erlang:send_after(Check, self(), check_heap)),
    (catch erlang:send_after(Evict, self(), evict_heap)),
    State#cache{heap=Heap, evict=Evict}.
 
 %%
 %%     
-terminate(_Reason, State) ->
-   cache_heap:purge(State#cache.heap, State#cache.heir),
+terminate(_Reason, #cache{heir = Heir, heap = Heap}) ->
+   cache_heap:purge(Heir, Heap),
    ok.
 
 
@@ -164,8 +157,12 @@ handle_call({heap, N}, _, State) ->
 handle_call(drop, _, State) ->
    {stop, normal, ok, State};
 
-handle_call(purge, _, State) ->
-   {reply, ok, State#cache{heap=cache_heap:purge(State#cache.heap, State#cache.heir)}};
+handle_call(purge, _, #cache{heir = Heir, heap = Heap} = State) ->
+   {reply, ok,
+      State#cache{
+         heap = cache_heap:purge(Heir, Heap)
+      }
+   };
 
 handle_call(_, _, State) ->
    {noreply, State}.
@@ -203,26 +200,25 @@ handle_cast(_, State) ->
 
 %%
 %%
-handle_info(check_heap, #cache{n=N, check=Check}=State) ->
+handle_info(check_heap, #cache{check = Check, heir = Heir, heap = Heap0} = State) ->
    erlang:send_after(Check, self(), check_heap),
-   {Reason, Heap} = cache_heap:slip(State#cache.heap),
-   case cache_heap:size(Heap) of
-      X when X > N ->
+   case cache_heap:slip(Heir, Heap0) of
+      {ok, Heap1} ->
+         {noreply, State#cache{heap = Heap1}};
+      {Reason, Heap1} ->
          cache_util:stats(State#cache.stats, {cache, State#cache.name, Reason}),
-         {noreply, State#cache{heap=cache_heap:drop(Heap, State#cache.heir)}};
-      _ ->
-         {noreply, State#cache{heap=Heap}}
+         {noreply, State#cache{heap = Heap1}}
    end;
 
-handle_info(evict_heap, #cache{n=N, evict=Evict}=State) ->
+
+handle_info(evict_heap, #cache{evict = Evict, heir = Heir, heap = Heap0} = State) ->
    erlang:send_after(Evict, self(), evict_heap),
-   {Reason, Heap} = cache_heap:slip(State#cache.heap),
-   case cache_heap:size(Heap) of
-      X when X > N ->
+   case cache_heap:slip(Heir, Heap0) of
+      {ok, Heap1} ->
+         {noreply, State#cache{heap = Heap1}};
+      {Reason, Heap1} ->
          cache_util:stats(State#cache.stats, {cache, State#cache.name, Reason}),
-         {noreply, State#cache{heap=cache_heap:drop(Heap, State#cache.heir)}};
-      _ ->
-         {noreply, State#cache{heap=Heap}}
+         {noreply, State#cache{heap = Heap1}}
    end;
 
 handle_info(_, S) ->
@@ -241,40 +237,33 @@ code_change(_Vsn, S, _Extra) ->
 
 %%
 %% insert value to cache
-cache_put(Key, Val, undefined, #cache{name=_Name, heap=Heap}=State) ->
-   {_, Head} = cache_heap:head(Heap),
+cache_put(Key, Val, undefined, #cache{name = _Name, heap = Heap} = State) ->
+   {{_, Head}, Tail} = cache_heap:split(Heap),
    true = ets:insert(Head, {Key, Val}),
-   ok   = heap_remove(Key, cache_heap:tail(Heap)),
+   ok   = heap_remove(Key, Tail),
    _    = stats(put, State),
    ?DEBUG("cache ~p: put ~p to heap ~p~n", [_Name, Key, Head]),
    State;
 
-cache_put(Key, Val, TTL, #cache{name=_Name, heap=Heap}=State) ->
-   Expire = cache_util:now() + TTL,
-   Refs   = cache_heap:refs(Heap),
-   case lists:splitwith(fun({X, _}) -> X > Expire end, Refs) of
-      {[],  _Tail} ->
-         cache_put(Key, Val, undefined, State);
-      {Head, Tail} ->
-         [{_, Inst} | Rest] = lists:reverse(Head),
-         true = ets:insert(Inst, {Key, Val}),
-         ok   = heap_remove(Key, Rest ++ Tail),
-         _    = stats(put, State),
-         ?DEBUG("cache ~p: put ~p to heap ~p~n", [_Name, Key, Inst]),
-         State
-   end.
+cache_put(Key, Val, TTL, #cache{name = _Name, heap = Heap} = State) ->
+   {{_, Head}, Tail} = cache_heap:split(cache_util:now() + TTL, Heap),
+   true = ets:insert(Head, {Key, Val}),
+   ok   = heap_remove(Key, Tail),
+   _    = stats(put, State),
+   ?DEBUG("cache ~p: put ~p to heap ~p~n", [_Name, Key, Head]),
+   State.
 
 %%
 %% get cache value
-cache_get(Key, #cache{policy=mru}=State) ->
+cache_get(Key, #cache{policy = mru} = State) ->
    % cache MRU should not move key anywhere because
    % cache always evicts last generation
    % fall-back to cache lookup
    cache_lookup(Key, State);
 
-cache_get(Key, #cache{name=_Name, heap=Heap}=State) ->
-   {_, Head} = cache_heap:head(Heap),
-   case heap_lookup(Key, cache_heap:refs(Heap)) of
+cache_get(Key, #cache{name = _Name, heap = Heap} = State) ->
+   {{_, Head}, Tail} = cache_heap:split(Heap),
+   case heap_lookup(Key, Head, Tail) of
       undefined   ->
          stats(miss, State),
          undefined;
@@ -292,8 +281,9 @@ cache_get(Key, #cache{name=_Name, heap=Heap}=State) ->
 
 %%
 %% lookup cache value
-cache_lookup(Key, #cache{name=_Name, heap=Heap}=State) ->
-   case heap_lookup(Key, cache_heap:refs(Heap)) of
+cache_lookup(Key, #cache{name = _Name, heap = Heap} = State) ->
+   {{_, Head}, Tail} = cache_heap:split(Heap),
+   case heap_lookup(Key, Head, Tail) of
       undefined    ->
          stats(miss, State),
          undefined;
@@ -306,7 +296,8 @@ cache_lookup(Key, #cache{name=_Name, heap=Heap}=State) ->
 %%
 %% check if key exists
 cache_has(Key, #cache{name=_Name, heap=Heap}) ->
-   case heap_has(Key, cache_heap:refs(Heap)) of
+   {Head, Tail} = cache_heap:split(Heap),
+   case heap_has(Key, Head, Tail) of
       false  ->
          false;
       _Heap  ->
@@ -316,8 +307,9 @@ cache_has(Key, #cache{name=_Name, heap=Heap}) ->
 
 %%
 %% check key ttl
-cache_ttl(Key,#cache{heap=Heap}) ->
-   case heap_has(Key, cache_heap:refs(Heap)) of
+cache_ttl(Key,#cache{heap = Heap}) ->
+   {Head, Tail} = cache_heap:split(Heap),
+   case heap_has(Key,  Head, Tail) of
       false       ->
          undefined;
       {Expire, _} ->
@@ -326,8 +318,9 @@ cache_ttl(Key,#cache{heap=Heap}) ->
 
 %%
 %%
-cache_remove(Key, #cache{name=_Name, heap=Heap}=State) ->
-   ok = heap_remove(Key, cache_heap:refs(Heap)),
+cache_remove(Key, #cache{name = _Name, heap = Heap} = State) ->
+   {{_, Head}, Tail} = cache_heap:split(Heap),
+   ok = heap_remove(Key, Head, Tail),
    _  = stats(remove, State),
    ?DEBUG("cache ~p: remove ~p~n", [_Name, Key]),
    State.
@@ -425,6 +418,14 @@ cache_append(Key, Val, State) ->
 
 %%
 %% remove key from heap segments
+heap_remove(Key, Heap, Tail) ->
+   ets:delete(Heap, Key),
+   heap_remove(Key, Tail).
+
+heap_remove(Key, {Tail, Head}) ->
+   heap_remove(Key, Tail),
+   heap_remove(Key, Head);
+
 heap_remove(Key, Heap) ->
    lists:foreach(
       fun({_, Id}) -> ets:delete(Id, Key) end, 
@@ -433,6 +434,20 @@ heap_remove(Key, Heap) ->
 
 %%
 %%
+heap_lookup(Key, Heap, Tail) ->
+   case ets:lookup(Heap, Key) of
+      []         -> heap_lookup(Key, Tail);
+      [{_, Val}] -> {Heap, Val}
+   end.
+
+heap_lookup(Key, {Tail, Head}) ->
+   case heap_lookup(Key, Tail) of
+      undefined ->
+         heap_lookup(Key, Head);
+      Hit ->
+         Hit
+   end;
+
 heap_lookup(Key, [{_, Heap} | Tail]) ->
    case ets:lookup(Heap, Key) of
       []         -> heap_lookup(Key, Tail);
@@ -444,7 +459,21 @@ heap_lookup(_Key, []) ->
 
 %%
 %%
-heap_has(Key, [{_, Heap}=X | Tail]) ->
+heap_has(Key, {_, Heap} = X, Tail) ->
+   case ets:lookup(Heap, Key) of
+      []       -> heap_has(Key, Tail);
+      [{_, _}] -> X
+   end.
+
+heap_has(Key, {Tail, Head}) ->
+   case heap_has(Key, Tail) of
+      false ->
+         heap_has(Key, Head);
+      Hit   ->
+         Hit
+   end;
+
+heap_has(Key, [{_, Heap} = X | Tail]) ->
    case ets:member(Heap, Key) of
       false  -> heap_has(Key, Tail);
       true   -> X

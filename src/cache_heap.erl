@@ -18,119 +18,165 @@
 -module(cache_heap).
 
 -export([
-   new/4
-  ,size/1
-  ,head/1
-  ,tail/1
-  ,refs/1
-  ,slip/1
-  ,drop/2
-  ,purge/2
+   new/5
+,  refs/1
+,  split/1
+,  split/2
+,  slip/2
+,  purge/2
 ]).   
 
 %%
-%% heap
+-type segment() :: [{integer(), reference()}].
+-type heir()    :: undefined | atom() | pid().
+-type queue()   :: {[segment()], [segment()]}.
+
 -record(heap, {
-   type        = set       :: atom(),      %% type of segment
-   ttl         = undefined :: integer(),   %% segment expire time
-   cardinality = undefined :: integer(),   %% segment cardinality quota
-   memory      = undefined :: integer(),   %% segment memory quota
-   segments    = []        :: [integer()]  %% segment references 
+   type        = set       :: atom()       %% type of segment
+,  n           = undefined :: integer()    %% number of segments
+,  ttl         = undefined :: integer()    %% segment expire time
+,  cardinality = undefined :: integer()    %% segment cardinality quota
+,  memory      = undefined :: integer()    %% segment memory quota
+,  segments    = undefined :: queue()      %% segment references
 }).
 
 %%
 %% create new empty heap
--spec(new(atom(), integer(), integer(), integer()) -> #heap{}).
+-spec new(atom(), integer(), integer(), integer(), integer()) -> #heap{}.
 
-new(Type, TTL, Cardinality, Memory) ->
+new(Type, N, TTL, Cardinality, Memory) ->
    init(#heap{
       type        = Type
-     ,ttl         = TTL
-     ,cardinality = Cardinality
-     ,memory      = Memory
+   ,  n           = N
+   ,  ttl         = TTL div N
+   ,  cardinality = cache_util:mdiv(Cardinality, N)
+   ,  memory      = cache_util:mdiv(cache_util:mdiv(Memory,  N), erlang:system_info(wordsize))
    }).
 
-%%
-%% return size of heap (number of segments)
--spec(size(#heap{}) -> integer()).
-
-size(#heap{segments=List}) ->
-   length(List).
-
-%%
-%% return head
--spec(head(#heap{}) -> {integer(), integer()}).
-
-head(#heap{segments=[Head | _]}) ->
-   Head.
+init(#heap{type = Type, n = N, ttl = TTL} = Heap) ->
+   T = cache_util:now(),
+   Segments = lists:map(
+      fun(Expire) ->
+         Ref = ets:new(undefined, [Type, protected]),
+         {T + Expire, Ref}
+      end,
+      lists:seq(TTL, N * TTL, TTL)
+   ),
+   Heap#heap{segments = queue:from_list(Segments)}.
 
 %%
-%% return tail
--spec(tail(#heap{}) -> [{integer(), integer()}]).
+%%
+-spec refs(#heap{}) -> [segment()].
 
-tail(#heap{segments=[_ | Tail]}) ->
-   Tail.
+refs(#heap{segments = Segments}) ->
+   lists:reverse(queue:to_list(Segments)).
 
 %%
-%% return reference to all segments
--spec(refs(#heap{}) -> [{integer(), integer()}]).
+%% split heap to writable segment and others
+-spec split(#heap{}) -> {segment(), queue()}.
 
-refs(#heap{segments=Refs}) ->
-   Refs.
+split(#heap{segments = Segments}) ->
+   {{value, Head}, Tail} = queue:out_r(Segments),
+   {Head, Tail}.
+
+
+-spec split(_, #heap{}) -> {segment(), queue()}.
+
+split(Expire, #heap{segments = {Tail, Head}} = Heap) ->
+   case 
+      lists:splitwith(
+         fun({T, _}) -> T > Expire end,
+         Tail
+      )
+   of
+      {_, []} ->
+         case
+            lists:splitwith(
+               fun({T, _}) -> T < Expire end,
+               Head
+            )
+         of
+            {[Segment | A], []} ->
+               {Segment, {Tail, A}};
+            {A, [Segment | B]} -> 
+               {Segment, {Tail, A ++ B}}
+         end;
+      {[], _} ->
+         split(Heap);
+      {A,  B} ->
+         [Segment | Ax] = lists:reverse(A),
+         {Segment, {lists:reverse(Ax) ++ B, Head}}
+   end.
+
 
 %%
 %% slip heap segments and report reason
--spec(slip(#heap{}) -> {ok | ttl | oom | ooc , #heap{}}).
+-spec slip(heir(), #heap{}) -> {ok | ttl | oom | ooc , #heap{}}.
 
-slip(#heap{}=Heap) ->
+slip(Heir, #heap{} = Heap) ->
    case is_expired(cache_util:now(), Heap) of
       false  ->
          {ok, Heap};
       Reason ->
-         {Reason, init(Heap)}
+         {Reason,
+            heap_remove_segment(Heir, heap_create_segment(Heap))
+         }
    end.
 
-is_expired(Time, #heap{cardinality=C, memory=M, segments=[{Expire, Ref}|_]}) ->
+is_expired(Time, Heap) ->
+   case is_expired_tail(Time, Heap) of
+      false  ->
+         is_expired_head(Heap);
+      Return ->
+         Return
+   end.
+
+is_expired_tail(Time, #heap{segments = Segments}) ->
+   {Expire, _} = queue:head(Segments),
+   case Time >= Expire of
+      true ->
+         ttl;
+      false ->
+         false
+   end.
+
+is_expired_head(#heap{cardinality = Card, memory = Mem, segments = Segments}) ->
+   {_, Ref} = queue:last(Segments),
    case 
-      {Time >= Expire, ets:info(Ref, size) >= C, ets:info(Ref, memory) >= M}
+      {ets:info(Ref, size) >= Card, ets:info(Ref, memory) >= Mem}
    of
-      {true, _, _} -> ttl;
-      {_, true, _} -> ooc;
-      {_, _, true} -> oom;
-      _            -> false
+      {true, _} -> ooc;
+      {_, true} -> oom;
+      _         -> false
    end.
 
-%%
-%% drop last segment 
--spec(drop(#heap{}, pid()) -> #heap{}).
+heap_create_segment(#heap{type = Type, ttl = TTL, segments = Segments} = Heap) ->
+   {LastTTL, _} = queue:last(Segments),
+   Ref    = ets:new(undefined, [Type, protected]),
+   Expire = TTL + LastTTL,
+   Heap#heap{segments = queue:in({Expire, Ref}, Segments)}.
 
-drop(#heap{segments=Segments}=Heap, Heir) ->
-   [{_, Ref}|T] = lists:reverse(Segments),
-   free(Heir, Ref),
-   Heap#heap{
-      segments = lists:reverse(T)
-   }.
+heap_remove_segment(Heir, #heap{segments = Segments} = Heap) ->
+   {{value, {_, Ref}}, T} = queue:out(Segments),
+   true = free(Heir, Ref),
+   Heap#heap{segments = T}.
 
 %%
 %% purge cache segments
--spec(purge(#heap{}, pid()) -> #heap{}).
+-spec purge(heir(), #heap{}) -> #heap{}.
 
-purge(#heap{segments=Segments}=Heap, Heir) ->
-   lists:foreach(fun({_, Ref}) -> free(Heir, Ref) end, Segments),
-   init(Heap#heap{segments=[]}).
-
-
-%%
-%% create heap segment
-init(#heap{segments=Segments}=Heap) ->
-   Ref    = ets:new(undefined, [Heap#heap.type, protected]),
-   Expire = cache_util:madd(Heap#heap.ttl,  cache_util:now()),
-   Heap#heap{segments = [{Expire, Ref} | Segments]}.
+purge(Heir, #heap{segments = Segments} = Heap) ->
+   lists:foreach(
+      fun({_, Ref}) -> true = free(Heir, Ref) end, 
+      queue:to_list(Segments)
+   ),
+   init(Heap#heap{segments = undefined}).
 
 %%
 %% destroy heap segment
 free(undefined, Ref) ->
    ets:delete(Ref);
+
 free(Heir, Ref)
  when is_pid(Heir) ->
    case erlang:is_process_alive(Heir) of
@@ -139,6 +185,7 @@ free(Heir, Ref)
       false ->
          ets:delete(Ref)
    end;
+
 free(Heir, Ref)
  when is_atom(Heir) ->
    case erlang:whereis(Heir) of
