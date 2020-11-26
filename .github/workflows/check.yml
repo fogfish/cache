@@ -23,9 +23,6 @@ jobs:
       - run: make
 
       - name: Coveralls
-        uses: coverallsapp/github-action@master
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          path-to-lcov: _build/test/cover/ct.coverdata
-
-      # - run: ./rebar3 coveralls send
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: ./rebar3 coveralls send
