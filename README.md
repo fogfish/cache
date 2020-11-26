@@ -92,7 +92,10 @@ receive {Ref, Val} -> Val end.
 
 ### transform element
 
-The library allows to read-and-modify (modify in-place) cached element. You can `apply` any function over cached elements.
+The library allows to read-and-modify (modify in-place) cached element. You can `apply` any function over cached elements and returns the result of the function. The apply acts a transformer with three possible outcomes:
+* `undefined` (e.g. `fun(_) -> undefined end`) - no action is taken, old cache value remains;
+* unchanged value (e.g. `fun(X) -> X end`) - no action is taken, old cache value remains;
+* new value (e.g. `fun(X) -> <<"x", X/binary>> end`) - the value in cache is replaced with the result of the function.
 
 ```erlang
 application:start(cache).
