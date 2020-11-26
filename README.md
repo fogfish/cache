@@ -2,7 +2,7 @@
 
 Library implements segmented in-memory cache.
 
-[![Build Status](https://secure.travis-ci.org/fogfish/cache.svg?branch=master)](http://travis-ci.org/fogfish/cache)
+[![Build Status](https://github.com/fogfish/cache/workflows/build/badge.svg)](https://github.com/fogfish/cache/actions/)
 [![Coverage Status](https://coveralls.io/repos/github/fogfish/cache/badge.svg?branch=master)](https://coveralls.io/github/fogfish/cache?branch=master) 
 [![Hex.pm](https://img.shields.io/hexpm/v/cache.svg)](https://hex.pm/packages/cache)
 [![Hex Downloads](https://img.shields.io/hexpm/dt/cache.svg)](https://hex.pm/packages/cache)
