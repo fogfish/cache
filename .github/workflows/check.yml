@@ -11,7 +11,7 @@ jobs:
     name: otp ${{matrix.otp}}
     strategy:
       matrix:
-        otp: [18.3, 19.3, 20.3, 21.3, 22.3, 23.1]
+        otp: [21.3, 22.3, 23.1]
     steps:
 
       - uses: actions/checkout@v2.0.0
