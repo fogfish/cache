@@ -165,16 +165,32 @@ apply(_Config) ->
    {ok, Cache} = cache:start_link([]),
    val = cache:apply(Cache, key, fun(undefined) -> val end),
    val = cache:get(Cache, key),
+
    lav = cache:apply(Cache, key, fun(val) -> lav end),
    lav = cache:get(Cache, key),
+
+   lav = cache:apply(Cache, key, fun(X) -> X end),
+   lav = cache:get(Cache, key),
+
+   undefined = cache:apply(Cache, key, fun(_) -> undefined end),
+   lav = cache:get(Cache, key),
+
    ok = cache:drop(Cache).   
 
 apply_(_Config) ->
    {ok, Cache} = cache:start_link([]),
    cache:apply_(Cache, key, fun(undefined) -> val end),
    val = cache:get(Cache, key),
+
    cache:apply_(Cache, key, fun(val) -> lav end),
    lav = cache:get(Cache, key),
+
+   cache:apply_(Cache, key, fun(X) -> X end),
+   lav = cache:get(Cache, key),
+
+   cache:apply_(Cache, key, fun(_) -> undefined end),
+   lav = cache:get(Cache, key),
+
    ok = cache:drop(Cache).   
 
 %%%----------------------------------------------------------------------------   
