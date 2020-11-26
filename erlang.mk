@@ -33,7 +33,7 @@ IID     = ${URI}${ORG}/${APP}
 ## required tools
 ##  - rebar version (no spaces at end)
 ##  - path to basho benchmark 
-REBAR  ?= 3.9.0
+REBAR  ?= 3.14.2
 BB      = ../basho_bench
 
 

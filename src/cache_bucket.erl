@@ -328,9 +328,12 @@ cache_remove(Key, #cache{name = _Name, heap = Heap} = State) ->
 %%
 %%
 cache_apply(Key, Fun, State) ->
-   case Fun(cache_get(Key, State)) of
+   Old = cache_get(Key, State),
+   case Fun(Old) of
       undefined  ->
          {undefined, State};
+      Old ->
+         {Old, State};
       Val ->
          {Val, cache_put(Key, Val, undefined, State)}
    end.   
