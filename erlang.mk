@@ -37,7 +37,7 @@ REBAR  ?= 3.14.2
 BB      = ../basho_bench
 
 
-## erlang runtime configration flags
+## erlang runtime configuration flags
 ROOT   = $(shell pwd)
 ADDR   = localhost.localdomain
 EFLAGS = \

@@ -138,7 +138,7 @@ The library implements the check-and-store semantic for put operations:
 
 ### configuration via Erlang `sys.config`
 
-The cache instances are configurable via `sys.config`. Theses cache instances are supervised by application supervisor.
+The cache instances are configurable via `sys.config`. These cache instances are supervised by application supervisor.
 
 ```erlang
 {cache, [
